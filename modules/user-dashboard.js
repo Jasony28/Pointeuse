@@ -6,7 +6,6 @@ import { getActiveChantiers, getTeamMembers } from "./data-service.js";
 const MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
 const HOME_BASE_ADDRESS = "Marche-en-Famenne, Belgium";
 
-let timerInterval = null;
 let chantiersCache = [];
 let colleaguesCache = [];
 let currentWeekOffset = 0;
@@ -20,7 +19,13 @@ export async function render() {
 
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
-            <div id="live-tracker-container" class="p-6 rounded-lg shadow-lg" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
+            <!-- Zone d'action principale : Pointage Manuel -->
+            <div class="p-6 rounded-lg shadow-lg text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="text-xl font-bold mb-4">Prêt à enregistrer vos heures ?</h3>
+                <button id="openManualPointageBtn" class="w-full md:w-auto text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg transition-colors" style="background-color: var(--color-primary); hover:background-color: var(--color-primary-hover);">
+                    ➕ Ajouter un pointage
+                </button>
+            </div>
             
             <div id="missed-pointage-suggestions" class="space-y-4"></div>
 
@@ -42,45 +47,62 @@ export async function render() {
             </div>
         </div>
 
-        <div id="startPointageModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-20 p-4">
-            <div class="p-6 rounded-lg shadow-xl w-full max-w-md" style="background-color: var(--color-surface);">
-                <h3 class="text-xl font-bold mb-4">Démarrer un pointage</h3>
-                <form id="startPointageForm" class="space-y-4">
-                    <div>
-                        <label class="text-sm font-medium">Chantier</label>
-                        <select id="startChantierSelect" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);" required></select>
+        <!-- MODAL DE POINTAGE MANUEL -->
+        <div id="manualPointageModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
+            <div class="p-6 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="text-xl font-bold mb-4">Ajouter un pointage</h3>
+                <form id="manualPointageForm" class="space-y-5">
+                    
+                    <!-- 1. Les Heures -->
+                    <div class="p-3 rounded border" style="background-color: var(--color-background); border-color: var(--color-border);">
+                        <label class="block text-sm font-bold mb-2" style="color: var(--color-primary);">1. Date et Heures</label>
+                        <input type="date" id="pointageDate" class="w-full border p-2 rounded mb-3" required>
+                        <div class="flex gap-4">
+                            <div class="w-1/2">
+                                <label class="text-xs font-medium text-gray-500">Heure d'arrivée</label>
+                                <input type="time" id="pointageStartTime" class="w-full border p-2 rounded mt-1" required>
+                            </div>
+                            <div class="w-1/2">
+                                <label class="text-xs font-medium text-gray-500">Heure de départ</label>
+                                <input type="time" id="pointageEndTime" class="w-full border p-2 rounded mt-1" required>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label class="text-sm font-medium">Collègues présents</label>
-                        <div id="startColleaguesContainer" class="mt-1 p-2 border rounded max-h-40 overflow-y-auto space-y-1" style="border-color: var(--color-border);"></div>
+
+                    <!-- 2. Le Chantier -->
+                    <div class="p-3 rounded border" style="background-color: var(--color-background); border-color: var(--color-border);">
+                        <label class="block text-sm font-bold mb-2" style="color: var(--color-primary);">2. Lieu du chantier</label>
+                        <select id="pointageChantierSelect" class="w-full border p-2 rounded" required></select>
                     </div>
-                    <div class="pt-2 border-t" style="border-color: var(--color-border);">
-                        <label class="flex items-center gap-3 cursor-pointer p-2 rounded">
-                            <input type="checkbox" id="isDriverCheckbox" class="h-5 w-5 rounded border-gray-300 focus:ring-offset-0" style="color: var(--color-primary);"/>
+
+                    <!-- 3. Les Personnes -->
+                    <div class="p-3 rounded border" style="background-color: var(--color-background); border-color: var(--color-border);">
+                        <label class="block text-sm font-bold mb-2" style="color: var(--color-primary);">3. Ton nom</label>
+                        <div id="manualColleaguesContainer" class="p-2 border rounded max-h-32 overflow-y-auto space-y-1 bg-white"></div>
+                        
+                        <!-- Ajout dynamique d'un nom -->
+                        <div class="flex gap-2 mt-3 pt-3 border-t">
+                            <input type="text" id="newPersonName" placeholder="Nom manquant ?" class="w-full border p-2 rounded text-sm">
+                            <button type="button" id="addNewPersonBtn" class="px-3 rounded text-sm font-bold text-white transition-colors" style="background-color: var(--color-primary);">Ajouter</button>
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-50">
+                            <input type="checkbox" id="isDriverCheckbox" class="h-5 w-5 rounded border-gray-300"/>
                             <span class="text-sm font-medium">Je suis le conducteur (pour le calcul des km)</span>
                         </label>
                     </div>
-                    <div class="flex justify-end gap-4 pt-4">
-                        <button type="button" id="cancelStartPointage" class="px-4 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
-                        <button type="submit" class="text-white px-4 py-2 rounded" style="background-color: var(--color-primary);">Démarrer</button>
-                    </div>
-                </form>
-            </div>
-        </div>
 
-        <div id="stopPointageModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-20 p-4">
-            <div class="p-6 rounded-lg shadow-xl w-full max-w-md" style="background-color: var(--color-surface);">
-                <h3 class="text-xl font-bold mb-4">Finaliser le pointage</h3>
-                <form id="stopPointageForm">
-                    <div class="space-y-4">
-                        <div>
-                            <label for="pointageNotes" class="text-sm font-medium">Note (facultatif)</label>
-                            <textarea id="pointageNotes" placeholder="Ex: Matériel manquant..." class="w-full border p-2 rounded mt-1 h-24" style="background-color: var(--color-background); border-color: var(--color-border);"></textarea>
-                        </div>
-                        <div class="flex justify-end gap-4 pt-4">
-                            <button type="button" id="cancelStopPointage" class="px-4 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
-                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded">Arrêter et Enregistrer</button>
-                        </div>
+                    <!-- 4. Note Facultative -->
+                    <div class="p-3 rounded border" style="background-color: var(--color-background); border-color: var(--color-border);">
+                        <label class="block text-sm font-bold mb-2" style="color: var(--color-primary);">4. Note (facultatif)</label>
+                        <textarea id="pointageNotes" placeholder="Problème rencontré, matériel manquant, retard..." class="w-full border p-2 rounded h-20"></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-4 pt-4 border-t">
+                        <button type="button" id="cancelManualPointage" class="px-4 py-2 rounded font-bold" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
+                        <button type="submit" id="submitPointageBtn" class="text-white font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-primary);">Enregistrer le pointage</button>
                     </div>
                 </form>
             </div>
@@ -115,14 +137,19 @@ export async function render() {
     setTimeout(async () => {
         try {
             await cacheDataForModals();
-            await checkForOpenPointage();
             initUnreadMessagesListener();
-            if (!localStorage.getItem('activePointage')) {
-                checkForMissedPointages();
-            }
+            checkForMissedPointages();
+            
             document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; displayWeekView(); };
             document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; displayWeekView(); };
             displayWeekView();
+
+            // Gestion du bouton principal et de la modale
+            document.getElementById('openManualPointageBtn').onclick = openManualModal;
+            document.getElementById('cancelManualPointage').onclick = closeManualModal;
+            
+            // Gestion de l'ajout dynamique d'un collègue
+            document.getElementById('addNewPersonBtn').onclick = addNewColleague;
 
             const closeBtn = document.getElementById('closeDetailsBtn');
             if(closeBtn) closeBtn.onclick = () => document.getElementById('detailsModal').classList.add('hidden');
@@ -144,305 +171,6 @@ async function cacheDataForModals() {
     const chantiersData = await getActiveChantiers();
     chantiersCache = chantiersData; 
     colleaguesCache = await getTeamMembers();
-}
-
-async function checkForOpenPointage() {
-    const q = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("endTime", "==", null), limit(1));
-    const snapshot = await getDocs(q);
-    if (!snapshot.empty) {
-        const openPointageDoc = snapshot.docs[0];
-        const pointageData = { docId: openPointageDoc.id, ...openPointageDoc.data() };
-        if (!pointageData.pauses) pointageData.pauses = [];
-        if (!pointageData.status) pointageData.status = 'running';
-        localStorage.setItem('activePointage', JSON.stringify(pointageData));
-    } else {
-        localStorage.removeItem('activePointage');
-    }
-    initLiveTracker();
-}
-
-function initLiveTracker() {
-    const container = document.getElementById('live-tracker-container');
-    if (!container) return;
-    const activePointage = JSON.parse(localStorage.getItem('activePointage'));
-
-    if (activePointage && activePointage.uid === currentUser.uid) {
-        const isPaused = activePointage.status === 'paused';
-        let chantierHTML = `<p class="text-2xl font-bold my-2" style="color: var(--color-primary);">${activePointage.chantier}</p>`;
-        
-        if (activePointage.chantierId) {
-            chantierHTML = `
-                <p id="liveChantierName" class="text-2xl font-bold my-2 cursor-pointer hover:underline" style="color: var(--color-primary);">
-                    ${activePointage.chantier}
-                </p>
-            `;
-        }
-
-        container.innerHTML = `
-            <div class="text-center">
-                <p style="color: var(--color-text-muted);">Pointage en cours sur :</p>
-                ${chantierHTML} 
-                <div id="timer" class="text-5xl font-mono my-4 tracking-wider ${isPaused ? 'text-yellow-500' : ''}">00:00:00</div>
-                ${isPaused ? '<p class="text-yellow-600 font-semibold mb-4">PAUSE</p>' : ''}
-                <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                    <button id="pauseResumeBtn" class="w-full sm:w-auto font-bold px-8 py-4 rounded-lg text-lg shadow-lg ${isPaused ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-yellow-500 hover:bg-yellow-600 text-white'}">${isPaused ? 'Reprendre' : 'Pause'}</button>
-                    <button id="stopBtn" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg">Arrêter</button>
-                </div>
-            </div>`;
-
-        if (activePointage.chantierId) {
-            const chantierNameEl = document.getElementById('liveChantierName');
-            if(chantierNameEl) {
-                chantierNameEl.onclick = () => dbShowDetailsModal(activePointage.chantierId);
-            }
-        }
-
-        updateTimerUI();
-        if (!isPaused) timerInterval = setInterval(updateTimerUI, 1000);
-        document.getElementById('pauseResumeBtn').onclick = isPaused ? resumePointage : pausePointage;
-        document.getElementById('stopBtn').onclick = openStopModal;
-    } else {
-        container.innerHTML = `
-            <div class="text-center">
-                <h3 class="text-xl font-bold mb-2">Prêt à commencer votre journée ?</h3>
-                <button id="startBtn" class="w-full md:w-auto text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg" style="background-color: var(--color-primary); transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='var(--color-primary-hover)'" onmouseout="this.style.backgroundColor='var(--color-primary)'">Démarrer un nouveau pointage</button>
-            </div>`;
-        document.getElementById('startBtn').onclick = openStartModal;
-    }
-}
-
-function updateTimerUI() {
-    const timerElement = document.getElementById('timer');
-    const activePointage = JSON.parse(localStorage.getItem('activePointage'));
-    if (!timerElement || !activePointage) { clearInterval(timerInterval); return; }
-    const startTime = new Date(activePointage.timestamp);
-    let totalPauseMs = (activePointage.pauses || []).reduce((acc, p) => acc + (p.end ? new Date(p.end) - new Date(p.start) : 0), 0);
-    let effectiveElapsedTime;
-    if (activePointage.status === 'paused') {
-        const lastPauseStart = new Date(activePointage.pauses.slice(-1)[0].start);
-        effectiveElapsedTime = (lastPauseStart - startTime) - totalPauseMs;
-    } else {
-        effectiveElapsedTime = (new Date() - startTime) - totalPauseMs;
-    }
-    const hours = String(Math.floor(effectiveElapsedTime / 3600000)).padStart(2, '0');
-    const minutes = String(Math.floor((effectiveElapsedTime % 3600000) / 60000)).padStart(2, '0');
-    const seconds = String(Math.floor((effectiveElapsedTime % 60000) / 1000)).padStart(2, '0');
-    timerElement.textContent = `${hours}:${minutes}:${seconds}`;
-}
-
-function pausePointage() {
-    clearInterval(timerInterval);
-    let activePointage = JSON.parse(localStorage.getItem('activePointage'));
-    activePointage.status = 'paused';
-    if (!activePointage.pauses) activePointage.pauses = [];
-    activePointage.pauses.push({ start: new Date().toISOString(), end: null });
-    localStorage.setItem('activePointage', JSON.stringify(activePointage));
-    const pointageRef = doc(db, "pointages", activePointage.docId);
-    updateDoc(pointageRef, { status: 'paused', pauses: activePointage.pauses });
-    initLiveTracker();
-}
-
-function resumePointage() {
-    let activePointage = JSON.parse(localStorage.getItem('activePointage'));
-    activePointage.status = 'running';
-    const lastPause = activePointage.pauses.slice(-1)[0];
-    if (lastPause && !lastPause.end) lastPause.end = new Date().toISOString();
-    localStorage.setItem('activePointage', JSON.stringify(activePointage));
-    const pointageRef = doc(db, "pointages", activePointage.docId);
-    updateDoc(pointageRef, { status: 'running', pauses: activePointage.pauses });
-    initLiveTracker();
-}
-
-async function startPointage(chantierId, chantierName, colleagues) {
-    const isDriver = document.getElementById('isDriverCheckbox').checked;
-    
-    const newPointageData = {
-        uid: currentUser.uid, userName: currentUser.displayName, 
-        chantier: chantierName, 
-        chantierId: chantierId,
-        colleagues,
-        timestamp: new Date().toISOString(), endTime: null, status: 'running', pauses: [], createdAt: serverTimestamp(),
-        isDriver: isDriver
-    };
-
-    try {
-        const newPointageRef = await addDoc(collection(db, "pointages"), newPointageData);
-        localStorage.setItem('activePointage', JSON.stringify({ docId: newPointageRef.id, ...newPointageData }));
-        
-        const lastPointageQuery = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("endTime", "!=", null), orderBy("endTime", "desc"), limit(1));
-        const lastPointageSnapshot = await getDocs(lastPointageQuery);
-        let startAddressForTravel = HOME_BASE_ADDRESS;
-        if (!lastPointageSnapshot.empty) {
-            const lastPointageDoc = lastPointageSnapshot.docs[0].data();
-            const lastEndTime = new Date(lastPointageDoc.endTime);
-            const now = new Date();
-            if (lastEndTime.toDateString() === now.toDateString()) {
-                const lastChantierQuery = query(collection(db, "chantiers"), where("name", "==", lastPointageDoc.chantier), limit(1));
-                const lastChantierSnapshot = await getDocs(lastChantierQuery);
-                if (!lastChantierSnapshot.empty) {
-                    startAddressForTravel = lastChantierSnapshot.docs[0].data().address;
-                }
-            }
-        }
-        
-        const newChantier = chantiersCache.find(c => c.id === chantierId);
-        if (newChantier && newChantier.address) {
-            const newChantierAddress = newChantier.address;
-            if (newChantierAddress !== startAddressForTravel) {
-                calculateAndSaveTravel(startAddressForTravel, newChantierAddress, newPointageRef.id, isDriver);
-            }
-        }
-
-        initLiveTracker();
-    } catch (error) {
-        console.error("Erreur de démarrage du pointage:", error);
-        showInfoModal("Erreur", "Le démarrage du pointage a échoué.");
-    }
-}
-
-async function stopPointage(notes = "") {
-    let activePointage = JSON.parse(localStorage.getItem('activePointage'));
-    if (!activePointage || !activePointage.docId) return;
-    if (activePointage.status === 'paused') {
-        const lastPause = activePointage.pauses.slice(-1)[0];
-        if (lastPause && !lastPause.end) lastPause.end = new Date().toISOString();
-    }
-    const totalPauseMs = (activePointage.pauses || []).reduce((acc, p) => acc + (p.end ? new Date(p.end) - new Date(p.start) : 0), 0);
-    const pointageRef = doc(db, "pointages", activePointage.docId);
-    try {
-        await updateDoc(pointageRef, { endTime: new Date().toISOString(), notes, pauseDurationMs: totalPauseMs, status: 'completed' });
-        showInfoModal("Succès", "Pointage enregistré avec succès !");
-    } catch (error) { 
-        console.error("Erreur d'enregistrement:", error); 
-        showInfoModal("Erreur", "Une erreur est survenue lors de l'enregistrement."); 
-    } finally { 
-        clearInterval(timerInterval); 
-        localStorage.removeItem('activePointage'); 
-        initLiveTracker(); 
-    }
-}
-
-async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageId, isDriver) {
-    if (!startAddress || !endAddress) {
-        console.log("Adresse de départ ou d'arrivée manquante pour le calcul du trajet.");
-        return;
-    }
-    try {
-        const getCoordinates = async (address) => {
-            const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE`;
-            const response = await fetch(geocodeUrl);
-            const data = await response.json();
-            if (!data.features || data.features.length === 0) throw new Error(`Adresse non trouvée : ${address}`);
-            return data.features[0].center;
-        };
-        const startCoords = await getCoordinates(startAddress);
-        const endCoords = await getCoordinates(endAddress);
-        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords.join(',')};${endCoords.join(',')}?access_token=${MAPBOX_ACCESS_TOKEN}&geometries=geojson`;
-        const response = await fetch(url);
-        const data = await response.json();
-        if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
-            throw new Error(data.message || "Itinéraire non trouvé.");
-        }
-        const route = data.routes[0];
-        const distanceKm = isDriver ? (route.distance / 1000).toFixed(2) : 0;
-        const durationMin = Math.round(route.duration / 60);
-        await addDoc(collection(db, "trajets"), {
-            id_utilisateur: currentUser.uid,
-            id_pointage_arrivee: arrivalPointageId, 
-            distance_km: parseFloat(distanceKm),
-            duree_min: durationMin,
-            date_creation: serverTimestamp()
-        });
-    } catch (error) {
-        console.error("Erreur lors du calcul du trajet:", error);
-    }
-}
-
-async function openStartModal() {
-    const modal = document.getElementById('startPointageModal');
-    const form = document.getElementById('startPointageForm');
-    const chantierSelect = document.getElementById('startChantierSelect');
-    const colleaguesContainer = document.getElementById('startColleaguesContainer');
-    chantierSelect.innerHTML = '<option>Chargement du planning...</option>';
-    colleaguesContainer.innerHTML = `<p class="text-sm" style="color: var(--color-text-muted);">Chargement...</p>`;
-    modal.classList.remove('hidden');
-    
-    const { weeklyChantiers, todaysColleagues, todaysChantiers } = await getContextualLists();
-    const weeklyChantiersOnly = new Set([...weeklyChantiers].filter(chantier => !todaysChantiers.has(chantier)));
-    
-    const otherChantiers = chantiersCache.filter(chantier => !weeklyChantiers.has(chantier.name));
-    
-    let chantierOptionsHTML = '';
-
-    const findAndBuildOption = (name) => {
-        const chantier = chantiersCache.find(c => c.name === name);
-        if (chantier) {
-            return `<option value="${chantier.id}">${chantier.name}</option>`;
-        }
-        return '';
-    };
-
-    if (todaysChantiers.size > 0) {
-        chantierOptionsHTML += '<optgroup label="Chantiers du jour">';
-        todaysChantiers.forEach(name => { chantierOptionsHTML += findAndBuildOption(name); });
-        chantierOptionsHTML += '</optgroup>';
-    }
-    if (weeklyChantiersOnly.size > 0) {
-        chantierOptionsHTML += '<optgroup label="Autres chantiers de la semaine">';
-        weeklyChantiersOnly.forEach(name => { chantierOptionsHTML += findAndBuildOption(name); });
-        chantierOptionsHTML += '</optgroup>';
-    }
-    if (otherChantiers.length > 0) {
-        chantierOptionsHTML += '<optgroup label="Tous les autres chantiers">';
-        otherChantiers.forEach(chantier => { chantierOptionsHTML += `<option value="${chantier.id}">${chantier.name}</option>`; });
-        chantierOptionsHTML += '</optgroup>';
-    }
-    chantierSelect.innerHTML = chantierOptionsHTML;
-    
-    if (!chantierSelect.innerHTML) {
-         chantierSelect.innerHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>';
-         chantiersCache.forEach(chantier => { chantierSelect.innerHTML += `<option value="${chantier.id}">${chantier.name}</option>`; });
-    }
-    
-    const otherColleagues = colleaguesCache.filter(colleague => !todaysColleagues.has(colleague.name) && colleague.name !== currentUser.displayName);
-    const createColleagueElement = (name) => `<label class="flex items-center gap-2 p-1 rounded w-full"><input type="checkbox" value="${name}" name="colleagues" /><span>${name}</span></label>`;
-    let colleaguesHTML = '';
-    
-    if (todaysColleagues.size > 0) {
-        todaysColleagues.forEach(name => { colleaguesHTML += createColleagueElement(name); });
-        colleaguesHTML += `<div class="w-full border-t my-2" style="border-color: var(--color-border);"></div>`;
-    }
-    colleaguesContainer.innerHTML = colleaguesHTML;
-    if (otherColleagues.length > 0) {
-        const showAllButton = document.createElement('button');
-        showAllButton.type = 'button';
-        showAllButton.textContent = `Afficher les ${otherColleagues.length} autres...`;
-        showAllButton.className = 'text-sm hover:underline w-full text-center p-1';
-        showAllButton.style.color = 'var(--color-primary)';
-        showAllButton.onclick = () => {
-            showAllButton.remove();
-            colleaguesContainer.insertAdjacentHTML('beforeend', otherColleagues.map(c => c.name).map(createColleagueElement).join(''));
-        };
-        colleaguesContainer.appendChild(showAllButton);
-    }
-
-    form.onsubmit = (e) => {
-        e.preventDefault();
-        const chantierId = chantierSelect.value;
-        if (!chantierId) { showInfoModal("Attention", "Veuillez choisir un chantier."); return; }
-        
-        const chantierName = chantiersCache.find(c => c.id === chantierId)?.name;
-        if (!chantierName) {
-            showInfoModal("Erreur", "Chantier sélectionné non trouvé."); return;
-        }
-
-        const selectedColleagues = Array.from(document.querySelectorAll('input[name="colleagues"]:checked')).map(el => el.value);
-        
-        startPointage(chantierId, chantierName, selectedColleagues);
-        closeStartModal();
-    };
-
-    document.getElementById('cancelStartPointage').onclick = closeStartModal;
 }
 
 async function getContextualLists() {
@@ -468,38 +196,240 @@ async function getContextualLists() {
     return { weeklyChantiers, todaysColleagues, todaysChantiers };
 }
 
-function closeStartModal() {
-    document.getElementById('startPointageModal').classList.add('hidden');
+async function openManualModal() {
+    const modal = document.getElementById('manualPointageModal');
+    const form = document.getElementById('manualPointageForm');
+    const chantierSelect = document.getElementById('pointageChantierSelect');
+    const colleaguesContainer = document.getElementById('manualColleaguesContainer');
+    const dateInput = document.getElementById('pointageDate');
+    
+    // Reset form et met la date du jour par défaut
+    form.reset();
+    dateInput.value = new Date().toISOString().split('T')[0];
+    
+    chantierSelect.innerHTML = '<option>Chargement...</option>';
+    colleaguesContainer.innerHTML = `<p class="text-sm text-gray-500">Chargement...</p>`;
+    modal.classList.remove('hidden');
+    
+    // Chargement des listes
+    const { weeklyChantiers, todaysColleagues, todaysChantiers } = await getContextualLists();
+    const weeklyChantiersOnly = new Set([...weeklyChantiers].filter(chantier => !todaysChantiers.has(chantier)));
+    const otherChantiers = chantiersCache.filter(chantier => !weeklyChantiers.has(chantier.name));
+    
+    // Remplissage des Chantiers
+    let chantierOptionsHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>';
+    const findAndBuildOption = (name) => {
+        const chantier = chantiersCache.find(c => c.name === name);
+        return chantier ? `<option value="${chantier.id}">${chantier.name}</option>` : '';
+    };
+
+    if (todaysChantiers.size > 0) {
+        chantierOptionsHTML += '<optgroup label="Chantiers du jour">';
+        todaysChantiers.forEach(name => { chantierOptionsHTML += findAndBuildOption(name); });
+        chantierOptionsHTML += '</optgroup>';
+    }
+    if (weeklyChantiersOnly.size > 0) {
+        chantierOptionsHTML += '<optgroup label="Autres chantiers de la semaine">';
+        weeklyChantiersOnly.forEach(name => { chantierOptionsHTML += findAndBuildOption(name); });
+        chantierOptionsHTML += '</optgroup>';
+    }
+    if (otherChantiers.length > 0) {
+        chantierOptionsHTML += '<optgroup label="Tous les autres chantiers">';
+        otherChantiers.forEach(chantier => { chantierOptionsHTML += `<option value="${chantier.id}">${chantier.name}</option>`; });
+        chantierOptionsHTML += '</optgroup>';
+    }
+    chantierSelect.innerHTML = chantierOptionsHTML;
+    
+    // Remplissage des Collègues
+    const otherColleagues = colleaguesCache.filter(colleague => !todaysColleagues.has(colleague.name) && colleague.name !== currentUser.displayName);
+    const createColleagueElement = (name, isChecked = false) => `
+        <label class="flex items-center gap-2 p-1.5 rounded hover:bg-gray-100 w-full cursor-pointer transition-colors">
+            <input type="checkbox" value="${name}" name="colleagues" ${isChecked ? 'checked' : ''} class="w-4 h-4 text-blue-600 rounded" />
+            <span class="font-medium text-gray-800">${name}</span>
+        </label>`;
+    
+    let colleaguesHTML = createColleagueElement(currentUser.displayName, true); // On s'ajoute soi-même par défaut
+    
+    if (todaysColleagues.size > 0) {
+        todaysColleagues.forEach(name => { colleaguesHTML += createColleagueElement(name); });
+    }
+    colleaguesHTML += `<div class="w-full border-t my-2 border-gray-200"></div>`;
+    
+    colleaguesContainer.innerHTML = colleaguesHTML;
+    
+    // Bouton pour afficher les autres
+    if (otherColleagues.length > 0) {
+        const showAllButton = document.createElement('button');
+        showAllButton.type = 'button';
+        showAllButton.textContent = `Afficher tout le monde...`;
+        showAllButton.className = 'text-sm hover:underline w-full text-center p-1 mt-2';
+        showAllButton.style.color = 'var(--color-primary)';
+        showAllButton.onclick = () => {
+            showAllButton.remove();
+            colleaguesContainer.insertAdjacentHTML('beforeend', otherColleagues.map(c => c.name).map(n => createColleagueElement(n)).join(''));
+        };
+        colleaguesContainer.appendChild(showAllButton);
+    }
+
+    // Gestion de la soumission du formulaire
+    form.onsubmit = submitManualPointage;
 }
 
-function openStopModal() {
-    const modal = document.getElementById('stopPointageModal');
-    const form = document.getElementById('stopPointageForm');
-    form.reset();
-    modal.classList.remove('hidden');
-    document.getElementById('cancelStopPointage').onclick = () => modal.classList.add('hidden');
-    document.getElementById('stopPointageForm').onsubmit = (e) => {
-        e.preventDefault();
-        const notes = document.getElementById('pointageNotes').value.trim();
-        stopPointage(notes);
-        modal.classList.add('hidden');
+function closeManualModal() {
+    document.getElementById('manualPointageModal').classList.add('hidden');
+}
+
+async function addNewColleague() {
+    const input = document.getElementById('newPersonName');
+    const newName = input.value.trim();
+    
+    if (!newName) return;
+
+    // 1. Ajouter visuellement à la liste et cocher directement
+    const container = document.getElementById('manualColleaguesContainer');
+    const label = document.createElement('label');
+    label.className = 'flex items-center gap-2 p-1.5 rounded hover:bg-green-50 bg-green-100 w-full cursor-pointer transition-colors mt-1';
+    label.innerHTML = `<input type="checkbox" value="${newName}" name="colleagues" checked class="w-4 h-4 text-blue-600 rounded" /><span class="font-bold text-green-800">${newName} (Nouveau)</span>`;
+    container.insertBefore(label, container.firstChild.nextSibling); // Insérer juste après soi-même
+    
+    input.value = ''; // Vider le champ
+
+    // 2. Sauvegarder dans Firebase pour que tout le monde l'ait la prochaine fois
+    try {
+        await addDoc(collection(db, "colleagues"), { name: newName, role: 'user', createdAt: serverTimestamp() });
+        colleaguesCache.push({ name: newName }); // Ajouter au cache local
+    } catch (error) {
+        console.error("Erreur lors de la sauvegarde du nouveau collègue:", error);
+    }
+}
+
+async function submitManualPointage(e) {
+    e.preventDefault();
+    
+    const btnSubmit = document.getElementById('submitPointageBtn');
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Enregistrement...';
+
+    const dateStr = document.getElementById('pointageDate').value;
+    const startTimeStr = document.getElementById('pointageStartTime').value;
+    const endTimeStr = document.getElementById('pointageEndTime').value;
+    const chantierId = document.getElementById('pointageChantierSelect').value;
+    const isDriver = document.getElementById('isDriverCheckbox').checked;
+    const notes = document.getElementById('pointageNotes').value.trim();
+    const selectedColleagues = Array.from(document.querySelectorAll('input[name="colleagues"]:checked')).map(el => el.value);
+
+    if (!chantierId) {
+        showInfoModal("Attention", "Veuillez choisir un chantier.");
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Enregistrer le pointage';
+        return;
+    }
+
+    const chantierName = chantiersCache.find(c => c.id === chantierId)?.name;
+
+    // Construction des dates exactes
+    let startDateTime = new Date(`${dateStr}T${startTimeStr}`);
+    let endDateTime = new Date(`${dateStr}T${endTimeStr}`);
+
+    // Si l'heure de fin est plus petite que l'heure de début, on suppose que c'est un pointage de nuit
+    if (endDateTime < startDateTime) {
+        endDateTime.setDate(endDateTime.getDate() + 1);
+    }
+
+    const newPointageData = {
+        uid: currentUser.uid, 
+        userName: currentUser.displayName, 
+        chantier: chantierName, 
+        chantierId: chantierId,
+        colleagues: selectedColleagues,
+        timestamp: startDateTime.toISOString(), 
+        endTime: endDateTime.toISOString(), 
+        status: 'completed', 
+        pauses: [], 
+        pauseDurationMs: 0,
+        createdAt: serverTimestamp(),
+        isDriver: isDriver,
+        notes: notes
     };
+
+    try {
+        const newPointageRef = await addDoc(collection(db, "pointages"), newPointageData);
+        
+        // Calcul automatique du trajet si le conducteur est coché
+        if (isDriver) {
+            const lastPointageQuery = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("status", "==", "completed"), orderBy("endTime", "desc"), limit(2));
+            const lastPointageSnapshot = await getDocs(lastPointageQuery);
+            
+            let startAddressForTravel = HOME_BASE_ADDRESS;
+            // Vérifier si un pointage précédent existe ce même jour
+            if (lastPointageSnapshot.docs.length > 1) {
+                const prevPointageDoc = lastPointageSnapshot.docs[1].data();
+                if (new Date(prevPointageDoc.endTime).toDateString() === startDateTime.toDateString()) {
+                    const prevChantierInfo = chantiersCache.find(c => c.name === prevPointageDoc.chantier);
+                    if (prevChantierInfo && prevChantierInfo.address) {
+                        startAddressForTravel = prevChantierInfo.address;
+                    }
+                }
+            }
+            
+            const currentChantier = chantiersCache.find(c => c.id === chantierId);
+            if (currentChantier && currentChantier.address && currentChantier.address !== startAddressForTravel) {
+                calculateAndSaveTravel(startAddressForTravel, currentChantier.address, newPointageRef.id, isDriver);
+            }
+        }
+
+        closeManualModal();
+        showInfoModal("Succès", "Ton pointage a été enregistré avec succès !");
+        
+    } catch (error) {
+        console.error("Erreur lors de l'enregistrement du pointage:", error);
+        showInfoModal("Erreur", "Une erreur est survenue lors de l'enregistrement de ton pointage.");
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Enregistrer le pointage';
+    }
+}
+
+async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageId, isDriver) {
+    if (!startAddress || !endAddress) return;
+    try {
+        const getCoordinates = async (address) => {
+            const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE`;
+            const response = await fetch(geocodeUrl);
+            const data = await response.json();
+            if (!data.features || data.features.length === 0) throw new Error(`Adresse non trouvée : ${address}`);
+            return data.features[0].center;
+        };
+        const startCoords = await getCoordinates(startAddress);
+        const endCoords = await getCoordinates(endAddress);
+        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords.join(',')};${endCoords.join(',')}?access_token=${MAPBOX_ACCESS_TOKEN}&geometries=geojson`;
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) throw new Error(data.message || "Itinéraire non trouvé.");
+        
+        const route = data.routes[0];
+        const distanceKm = isDriver ? (route.distance / 1000).toFixed(2) : 0;
+        const durationMin = Math.round(route.duration / 60);
+        
+        await addDoc(collection(db, "trajets"), {
+            id_utilisateur: currentUser.uid,
+            id_pointage_arrivee: arrivalPointageId, 
+            distance_km: parseFloat(distanceKm),
+            duree_min: durationMin,
+            date_creation: serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Erreur lors du calcul du trajet:", error);
+    }
 }
 
 function formatDecimalHours(decimalHours) {
     if (!decimalHours || decimalHours <= 0) return '0h';
-    
     const hours = Math.floor(decimalHours);
     const minutes = Math.round((decimalHours - hours) * 60);
-    
     let parts = [];
-    if (hours > 0) {
-        parts.push(`${hours}h`);
-    }
-    if (minutes > 0) {
-        parts.push(`${String(minutes).padStart(2, '0')}m`);
-    }
-    
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${String(minutes).padStart(2, '0')}m`);
     return parts.length > 0 ? parts.join(' ') : '0h';
 }
 
@@ -508,8 +438,8 @@ function dbShowDetailsModal(chantierId) {
     if (!chantier) return;
 
     document.getElementById('modalChantierName').textContent = chantier.name;
-    
     const addressTrigger = document.getElementById('modalChantierAddress');
+    
     if (chantier.address) {
         addressTrigger.textContent = chantier.address;
         addressTrigger.onclick = () => dbShowNavigationChoice(chantier.address);
@@ -540,8 +470,8 @@ function dbShowDetailsModal(chantierId) {
     } else {
         keyboxContainer.textContent = "Non spécifié";
     }
-    document.getElementById('modalChantierInfo').textContent = chantier.additionalInfo || "Aucune";
     
+    document.getElementById('modalChantierInfo').textContent = chantier.additionalInfo || "Aucune";
     document.getElementById('detailsModal').classList.remove('hidden');
 }
 
@@ -552,7 +482,6 @@ function dbShowNavigationChoice(address) {
 
     document.getElementById('navGoogleMaps').href = mapsUrl;
     document.getElementById('navWaze').href = wazeUrl;
-
     document.getElementById('navigationModal').classList.remove('hidden');
 }
 
@@ -565,9 +494,7 @@ function displayWeekView() {
     }
 
     const totalHoursElement = document.getElementById("currentWeekTotalHours");
-    if (totalHoursElement) {
-        totalHoursElement.textContent = 'Chargement...';
-    }
+    if (totalHoursElement) totalHoursElement.textContent = 'Chargement...';
 
     const scheduleGrid = document.getElementById("schedule-grid");
     if(scheduleGrid) {
@@ -595,12 +522,11 @@ async function loadUserScheduleForWeek(start, end) {
     const weekId = start.toISOString().split('T')[0];
     const publishDoc = await getDoc(doc(db, "publishedSchedules", weekId));
     const scheduleGrid = document.getElementById("schedule-grid");
-    
     const totalHoursElement = document.getElementById("currentWeekTotalHours");
 
     if (!publishDoc.exists()) {
-        if(scheduleGrid) scheduleGrid.innerHTML = `<p class'col-span-1 md:col-span-7 text-center p-4' style='color: var(--color-text-muted);'>Le planning de cette semaine n'a pas encore été publié.</p>`;
-        if (totalHoursElement) totalHoursElement.textContent = 'Total semaine prevues : 0h';
+        if(scheduleGrid) scheduleGrid.innerHTML = `<p class='col-span-1 md:col-span-7 text-center p-4' style='color: var(--color-text-muted);'>Le planning de cette semaine n'a pas encore été publié.</p>`;
+        if (totalHoursElement) totalHoursElement.textContent = 'Total semaine prévues : 0h';
         return;
     }
 
@@ -621,28 +547,21 @@ async function loadUserScheduleForWeek(start, end) {
     userSchedule.forEach(task => {
         const utcDate = new Date(task.date + 'T12:00:00Z');
         const dayIndex = (utcDate.getUTCDay() + 6) % 7;
-
         const chantierDetails = chantiersCache.find(c => c.id === task.chantierId);
         const teamCount = (task.teamNames || []).length;
         
         if (chantierDetails && chantierDetails.totalHeuresPrevues > 0 && teamCount > 0) {
-            const totalBudget = chantierDetails.totalHeuresPrevues;
-            const budgetPerPerson = (totalBudget / teamCount);
-            
+            const budgetPerPerson = (chantierDetails.totalHeuresPrevues / teamCount);
             totalWeekHours += budgetPerPerson;
             dailyTotals[dayIndex] += budgetPerPerson;
         }
     });
     
-    if (totalHoursElement) {
-        totalHoursElement.textContent = `Total semaine prevues : ${formatDecimalHours(totalWeekHours)}`;
-    }
+    if (totalHoursElement) totalHoursElement.textContent = `Total semaine prévues : ${formatDecimalHours(totalWeekHours)}`;
 
     for (let i = 0; i < 7; i++) {
         const dayTotalEl = document.getElementById(`day-total-${i}`);
-        if (dayTotalEl && dailyTotals[i] > 0) {
-            dayTotalEl.textContent = formatDecimalHours(dailyTotals[i]);
-        }
+        if (dayTotalEl && dailyTotals[i] > 0) dayTotalEl.textContent = formatDecimalHours(dailyTotals[i]);
     }
 
     for (let i = 0; i < 7; i++) {
@@ -667,23 +586,18 @@ function createTaskElement(task, chantierDetails) {
     el.style.backgroundColor = 'var(--color-surface)';
     el.style.borderColor = 'var(--color-primary)';
 
-    if (chantierDetails) {
-        el.onclick = () => dbShowDetailsModal(chantierDetails.id);
-    }
+    if (chantierDetails) el.onclick = () => dbShowDetailsModal(chantierDetails.id);
     
     const teamNames = task.teamNames || [];
     const teamCount = teamNames.length;
     const team = teamCount > 0 ? `Équipe : ${teamNames.join(', ')}` : 'Pas d\'équipe';
-    
     const note = task.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-primary);"><strong>Note:</strong> ${task.notes}</div>` : '';
 
     let projectBudgetHTML = '';
     if (chantierDetails && chantierDetails.totalHeuresPrevues > 0) {
         const totalBudget = chantierDetails.totalHeuresPrevues;
-        
         if (teamCount > 0) {
             const budgetPerPersonDecimal = (totalBudget / teamCount);
-            
             projectBudgetHTML = `
                 <div class="text-xs mt-1" style="color: var(--color-text-muted);">
                     Heures prévues (projet) : <strong>${formatDecimalHours(totalBudget)}</strong>
@@ -700,7 +614,6 @@ function createTaskElement(task, chantierDetails) {
     }
 
     el.innerHTML = `<div class="font-semibold" style="color: var(--color-text-base);">${task.chantierName}</div>
-                    
                     <div class="text-xs mt-1" style="color: var(--color-text-muted);">${team}</div>
                     <div class="mt-2 pt-2 border-t" style="border-color: var(--color-border);">
                         ${projectBudgetHTML} </div>
@@ -745,24 +658,22 @@ async function checkForMissedPointages() {
             finalSuggestions.push(suggestion);
         }
     });
-    if (finalSuggestions.length > 0) {
-        renderSuggestions(finalSuggestions);
-    }
+    if (finalSuggestions.length > 0) renderSuggestions(finalSuggestions);
 }
 
 function renderSuggestions(suggestions) {
     const container = document.getElementById('missed-pointage-suggestions');
-    container.innerHTML = `<h3 class="text-lg font-semibold" style="color: var(--color-text-base);">Suggestions de pointages manqués :</h3>`;
+    container.innerHTML = `<h3 class="text-lg font-semibold" style="color: var(--color-text-base);">Suggestions de pointages :</h3>`;
     suggestions.forEach(sugg => {
         const start = new Date(sugg.timestamp);
         const end = new Date(sugg.endTime);
         const timeFormat = { hour: '2-digit', minute: '2-digit' };
         const card = document.createElement('div');
-        card.className = 'border-l-4 p-4 rounded-r-lg shadow-sm';
+        card.className = 'border-l-4 p-4 rounded-r-lg shadow-sm mb-3';
         card.style.borderColor = 'orange';
         card.style.backgroundColor = 'var(--color-surface)';
         card.innerHTML = `
-            <p class="font-semibold">${sugg.userName} a pointé sur le chantier <strong style="color: var(--color-primary);">${sugg.chantier}</strong>.</p>
+            <p class="font-semibold">${sugg.userName} a pointé sur <strong style="color: var(--color-primary);">${sugg.chantier}</strong>.</p>
             <p class="text-sm" style="color: var(--color-text-muted);">Le ${start.toLocaleDateString('fr-FR')} de ${start.toLocaleTimeString('fr-FR', timeFormat)} à ${end.toLocaleTimeString('fr-FR', timeFormat)}.</p>
             <p class="mt-2 font-medium">Étiez-vous avec cette personne ?</p>
             <div class="flex gap-4 mt-3">
@@ -779,6 +690,7 @@ async function handleSuggestionClick(e) {
     const button = e.target;
     const suggId = button.dataset.suggId;
     if (!suggId) return;
+    
     if (button.classList.contains('accept-suggestion-btn')) {
         const suggDoc = await getDoc(doc(db, "pointages", suggId));
         if (!suggDoc.exists()) {
@@ -789,6 +701,7 @@ async function handleSuggestionClick(e) {
         const originalColleagues = suggestion.colleagues || [];
         const filteredColleagues = originalColleagues.filter(name => name !== currentUser.displayName);
         const finalColleagues = [...new Set([...filteredColleagues, suggestion.userName])];
+        
         const newPointageData = {
             ...suggestion,
             uid: currentUser.uid,
@@ -797,6 +710,7 @@ async function handleSuggestionClick(e) {
             createdAt: serverTimestamp(),
             notes: `(Pointage ajouté depuis la saisie de ${suggestion.userName}) --- ${suggestion.notes || ''}`
         };
+        
         try {
             await addDoc(collection(db, "pointages"), newPointageData);
             showInfoModal("Succès", "Le pointage a été ajouté à votre historique.");
@@ -818,10 +732,7 @@ function initUnreadMessagesListener() {
     const container = document.getElementById('unread-messages-container');
     if (!container) return;
 
-    const q = query(
-        collection(db, "chats"), 
-        where("participants", "array-contains", currentUser.uid)
-    );
+    const q = query(collection(db, "chats"), where("participants", "array-contains", currentUser.uid));
 
     unreadListener = onSnapshot(q, (snapshot) => {
         let totalUnread = 0;
@@ -833,7 +744,6 @@ function initUnreadMessagesListener() {
             if (data.hiddenFor && data.hiddenFor.includes(currentUser.uid)) return;
 
             const myUnreadCount = (data.unreadCounts && data.unreadCounts[currentUser.uid]) ? data.unreadCounts[currentUser.uid] : 0;
-            
             if (myUnreadCount > 0) {
                 totalUnread += myUnreadCount;
                 const otherName = data.participantNames.find(n => n !== (currentUser.displayName || 'Moi')) || 'Collègue';
@@ -876,10 +786,7 @@ function initUnreadMessagesListener() {
                 </div>
             `;
             container.classList.remove('hidden');
-            
-            container.onclick = () => {
-                navigateTo('user-chat');
-            };
+            container.onclick = () => navigateTo('user-chat');
         } else {
             container.classList.add('hidden');
             container.innerHTML = '';
