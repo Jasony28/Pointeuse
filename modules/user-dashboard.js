@@ -22,7 +22,7 @@ export async function render() {
             <!-- Zone d'action principale : Pointage Manuel -->
             <div class="p-6 rounded-lg shadow-lg text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <h3 class="text-xl font-bold mb-4">Prêt à enregistrer vos heures ?</h3>
-                <button id="openManualPointageBtn" class="w-full md:w-auto text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg transition-colors" style="background-color: var(--color-primary); hover:background-color: var(--color-primary-hover);">
+                <button id="openManualPointageBtn" class="w-full md:w-auto text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg transition-colors" style="background-color: var(--color-primary);">
                     ➕ Ajouter un pointage
                 </button>
             </div>
@@ -77,12 +77,14 @@ export async function render() {
 
                     <!-- 3. Les Personnes -->
                     <div class="p-3 rounded border" style="background-color: var(--color-background); border-color: var(--color-border);">
-                        <label class="block text-sm font-bold mb-2" style="color: var(--color-primary);">3. Ton nom</label>
-                        <div id="manualColleaguesContainer" class="p-2 border rounded max-h-32 overflow-y-auto space-y-1 bg-white"></div>
+                        <label class="block text-sm font-bold mb-2" style="color: var(--color-primary);">3. Équipe présente</label>
                         
-                        <!-- Ajout dynamique d'un nom -->
-                        <div class="flex gap-2 mt-3 pt-3 border-t">
-                            <input type="text" id="newPersonName" placeholder="Nom manquant ?" class="w-full border p-2 rounded text-sm">
+                        <!-- Liste des personnes ajoutées -->
+                        <div id="manualColleaguesContainer" class="max-h-32 overflow-y-auto space-y-1 empty:hidden"></div>
+                        
+                        <!-- Ajout manuel obligatoire -->
+                        <div class="flex gap-2 mt-2">
+                            <input type="text" id="newPersonName" placeholder="Taper un nom ici..." class="w-full border p-2 rounded text-sm">
                             <button type="button" id="addNewPersonBtn" class="px-3 rounded text-sm font-bold text-white transition-colors" style="background-color: var(--color-primary);">Ajouter</button>
                         </div>
                     </div>
@@ -151,6 +153,14 @@ export async function render() {
             // Gestion de l'ajout dynamique d'un collègue
             document.getElementById('addNewPersonBtn').onclick = addNewColleague;
 
+            // NOUVEAU : Empêche la touche "Entrée" de valider tout le pointage par erreur
+            document.getElementById('newPersonName').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault(); 
+                    addNewColleague();  
+                }
+            });
+
             const closeBtn = document.getElementById('closeDetailsBtn');
             if(closeBtn) closeBtn.onclick = () => document.getElementById('detailsModal').classList.add('hidden');
             
@@ -176,7 +186,7 @@ async function cacheDataForModals() {
 async function getContextualLists() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(0);
     const todayStr = new Date().toISOString().split('T')[0];
-    const weeklyChantiers = new Set(), todaysColleagues = new Set(), todaysChantiers = new Set();
+    const weeklyChantiers = new Set(), todaysChantiers = new Set();
     try {
         const q = query(collection(db, "planning"), where("date", ">=", startOfWeek.toISOString().split('T')[0]), where("date", "<=", endOfWeek.toISOString().split('T')[0]));
         const querySnapshot = await getDocs(q);
@@ -186,14 +196,11 @@ async function getContextualLists() {
                 weeklyChantiers.add(task.chantierName);
                 if (task.date === todayStr) {
                     todaysChantiers.add(task.chantierName);
-                    task.teamNames.forEach(name => {
-                        if (name !== currentUser.displayName) { todaysColleagues.add(name); }
-                    });
                 }
             }
         });
     } catch (error) { console.error("Impossible de charger le planning contextuel:", error); }
-    return { weeklyChantiers, todaysColleagues, todaysChantiers };
+    return { weeklyChantiers, todaysChantiers };
 }
 
 async function openManualModal() {
@@ -207,12 +214,14 @@ async function openManualModal() {
     form.reset();
     dateInput.value = new Date().toISOString().split('T')[0];
     
+    // On vide complètement la liste des collègues, pour obliger à les écrire
+    colleaguesContainer.innerHTML = '';
+    
     chantierSelect.innerHTML = '<option>Chargement...</option>';
-    colleaguesContainer.innerHTML = `<p class="text-sm text-gray-500">Chargement...</p>`;
     modal.classList.remove('hidden');
     
-    // Chargement des listes
-    const { weeklyChantiers, todaysColleagues, todaysChantiers } = await getContextualLists();
+    // Chargement des listes de chantiers
+    const { weeklyChantiers, todaysChantiers } = await getContextualLists();
     const weeklyChantiersOnly = new Set([...weeklyChantiers].filter(chantier => !todaysChantiers.has(chantier)));
     const otherChantiers = chantiersCache.filter(chantier => !weeklyChantiers.has(chantier.name));
     
@@ -239,37 +248,6 @@ async function openManualModal() {
         chantierOptionsHTML += '</optgroup>';
     }
     chantierSelect.innerHTML = chantierOptionsHTML;
-    
-    // Remplissage des Collègues
-    const otherColleagues = colleaguesCache.filter(colleague => !todaysColleagues.has(colleague.name) && colleague.name !== currentUser.displayName);
-    const createColleagueElement = (name, isChecked = false) => `
-        <label class="flex items-center gap-2 p-1.5 rounded hover:bg-gray-100 w-full cursor-pointer transition-colors">
-            <input type="checkbox" value="${name}" name="colleagues" ${isChecked ? 'checked' : ''} class="w-4 h-4 text-blue-600 rounded" />
-            <span class="font-medium text-gray-800">${name}</span>
-        </label>`;
-    
-    let colleaguesHTML = createColleagueElement(currentUser.displayName, true); // On s'ajoute soi-même par défaut
-    
-    if (todaysColleagues.size > 0) {
-        todaysColleagues.forEach(name => { colleaguesHTML += createColleagueElement(name); });
-    }
-    colleaguesHTML += `<div class="w-full border-t my-2 border-gray-200"></div>`;
-    
-    colleaguesContainer.innerHTML = colleaguesHTML;
-    
-    // Bouton pour afficher les autres
-    if (otherColleagues.length > 0) {
-        const showAllButton = document.createElement('button');
-        showAllButton.type = 'button';
-        showAllButton.textContent = `Afficher tout le monde...`;
-        showAllButton.className = 'text-sm hover:underline w-full text-center p-1 mt-2';
-        showAllButton.style.color = 'var(--color-primary)';
-        showAllButton.onclick = () => {
-            showAllButton.remove();
-            colleaguesContainer.insertAdjacentHTML('beforeend', otherColleagues.map(c => c.name).map(n => createColleagueElement(n)).join(''));
-        };
-        colleaguesContainer.appendChild(showAllButton);
-    }
 
     // Gestion de la soumission du formulaire
     form.onsubmit = submitManualPointage;
@@ -288,18 +266,23 @@ async function addNewColleague() {
     // 1. Ajouter visuellement à la liste et cocher directement
     const container = document.getElementById('manualColleaguesContainer');
     const label = document.createElement('label');
-    label.className = 'flex items-center gap-2 p-1.5 rounded hover:bg-green-50 bg-green-100 w-full cursor-pointer transition-colors mt-1';
-    label.innerHTML = `<input type="checkbox" value="${newName}" name="colleagues" checked class="w-4 h-4 text-blue-600 rounded" /><span class="font-bold text-green-800">${newName} (Nouveau)</span>`;
-    container.insertBefore(label, container.firstChild.nextSibling); // Insérer juste après soi-même
+    label.className = 'flex items-center gap-2 p-2 mb-1 rounded bg-green-100 w-full cursor-pointer transition-colors';
+    label.innerHTML = `<input type="checkbox" value="${newName}" name="colleagues" checked class="w-4 h-4 text-blue-600 rounded" /><span class="font-bold text-green-800">${newName}</span>`;
+    
+    container.appendChild(label); // Ajoute à la fin de la liste
     
     input.value = ''; // Vider le champ
+    input.focus(); // Garde le curseur dans le champ au cas où on veut en ajouter un 2ème
 
-    // 2. Sauvegarder dans Firebase pour que tout le monde l'ait la prochaine fois
+    // 2. Sauvegarder dans Firebase (seulement s'il n'existe pas déjà)
     try {
-        await addDoc(collection(db, "colleagues"), { name: newName, role: 'user', createdAt: serverTimestamp() });
-        colleaguesCache.push({ name: newName }); // Ajouter au cache local
+        const nameExists = colleaguesCache.find(c => c.name.toLowerCase() === newName.toLowerCase());
+        if (!nameExists) {
+            await addDoc(collection(db, "colleagues"), { name: newName, role: 'user', createdAt: serverTimestamp() });
+            colleaguesCache.push({ name: newName }); 
+        }
     } catch (error) {
-        console.error("Erreur lors de la sauvegarde du nouveau collègue:", error);
+        console.error("Erreur lors de la sauvegarde du collègue:", error);
     }
 }
 
@@ -307,6 +290,15 @@ async function submitManualPointage(e) {
     e.preventDefault();
     
     const btnSubmit = document.getElementById('submitPointageBtn');
+    
+    const selectedColleagues = Array.from(document.querySelectorAll('input[name="colleagues"]:checked')).map(el => el.value);
+
+    // VÉRIFICATION : L'utilisateur doit avoir ajouté au moins un nom
+    if (selectedColleagues.length === 0) {
+        showInfoModal("Attention", "Veuillez ajouter au moins une personne (vous-même ou un collègue) dans la liste de l'équipe.");
+        return;
+    }
+
     btnSubmit.disabled = true;
     btnSubmit.textContent = 'Enregistrement...';
 
@@ -316,7 +308,6 @@ async function submitManualPointage(e) {
     const chantierId = document.getElementById('pointageChantierSelect').value;
     const isDriver = document.getElementById('isDriverCheckbox').checked;
     const notes = document.getElementById('pointageNotes').value.trim();
-    const selectedColleagues = Array.from(document.querySelectorAll('input[name="colleagues"]:checked')).map(el => el.value);
 
     if (!chantierId) {
         showInfoModal("Attention", "Veuillez choisir un chantier.");
