@@ -1,3 +1,5 @@
+// DANS : modules/user-history.js
+
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, isStealthMode } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
@@ -37,7 +39,12 @@ async function logAction(pointageId, action, details = {}) {
 }
 
 export async function render(params = {}) {
-    targetUser = (params.userId && currentUser.role === 'admin') ? { uid: params.userId, name: params.userName } : { uid: currentUser.uid, name: "Mon" };
+    const activeProfileName = localStorage.getItem('currentProfileName') || currentUser.displayName;
+    
+    // NOUVEAU : On utilise le nom du profil actif pour l'affichage au lieu de "Mon"
+    targetUser = (params.userId && currentUser.role === 'admin') 
+        ? { uid: params.userId, name: params.userName } 
+        : { uid: currentUser.uid, name: activeProfileName };
 
     pageContent.innerHTML = `
         <div class="max-w-5xl mx-auto">
@@ -161,6 +168,8 @@ function setupReassignModalListeners() {
     reassignConfirmBtn = document.getElementById('reassignConfirmBtn');
     reassignCancelBtn = document.getElementById('reassignCancelBtn');
 
+    if(!reassignConfirmBtn) return; // Sécurité si jamais l'élément manque
+
     reassignConfirmBtn.addEventListener('click', async () => {
         const pointageId = reassignModal.dataset.pointageId;
         if (!pointageId) return;
@@ -181,8 +190,6 @@ function setupReassignModalListeners() {
         const userConfirmed = await showConfirmationModal("Confirmation de Duplication", confirmationMessage);
 
         if (userConfirmed) {
-            // ▼▼▼ CORRECTION ICI ▼▼▼
-            // Remplacez 'reassignPointage' par 'duplicatePointage'
             await duplicatePointage(pointageId, newUserId, newUserName, pointageToDuplicate);
         }
     });
@@ -192,20 +199,24 @@ function setupReassignModalListeners() {
     });
 }
 
-
 async function cacheModalData() {
-    const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
+    const chantiersQuery = query(collection(db, "chantiers"), orderBy("name"));
     const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
     const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
     const [chantiersSnapshot, colleaguesSnapshot, usersSnapshot] = await Promise.all([getDocs(chantiersQuery), getDocs(colleaguesQuery), getDocs(usersQuery)]);
     
-    chantiersCache = chantiersSnapshot.docs.map(doc => doc.data().name);
+    chantiersCache = chantiersSnapshot.docs.map(doc => ({ 
+        name: doc.data().name, 
+        isHideable: doc.data().isHideable || false, 
+        status: doc.data().status 
+    }));
+    
     const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
     const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
     colleaguesCache = [...new Set([...colleagueNames, ...userNames])].sort((a, b) => a.localeCompare(b));
 
     const filterChantierSelect = document.getElementById('filterChantier');
-    filterChantierSelect.innerHTML = '<option value="">Tous les chantiers</option>' + chantiersCache.map(name => `<option value="${name}">${name}</option>`).join('');
+    filterChantierSelect.innerHTML = '<option value="">Tous les chantiers</option>' + [...new Set(chantiersCache.map(c => c.name))].map(name => `<option value="${name}">${name}</option>`).join('');
 }
 
 async function getPointages(startDate, endDate, chantierFilter = null) {
@@ -228,7 +239,17 @@ async function getPointages(startDate, endDate, chantierFilter = null) {
     );
     const [pointagesSnapshot, trajetsSnapshot] = await Promise.all([getDocs(pointagesQuery), getDocs(trajetsQuery)]);
     
-    const pointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    let pointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // --- NOUVEAU : Filtrage local pour éviter le message d'erreur d'Index Firestore ---
+    // Si c'est un employé normal, on ne garde QUE les pointages de son profil.
+    // L'Admin verra tout.
+    if (currentUser.role !== 'admin') {
+        const activeProfileName = localStorage.getItem('currentProfileName') || currentUser.displayName;
+        pointages = pointages.filter(p => p.userName === activeProfileName);
+    }
+    // ------------------------------------------------------------------------------------
+
     const trajetsMap = new Map();
     trajetsSnapshot.forEach(doc => trajetsMap.set(doc.data().id_pointage_arrivee, doc.data()));
 
@@ -414,8 +435,8 @@ function switchView(view) {
 }
 
 function applyFilters() {
-    document.getElementById('weekly-nav').style.display = 'none'; // Cache la navigation par semaine
-    document.getElementById('totalsDisplay').style.display = 'grid'; // S'assure que les totaux sont visibles
+    document.getElementById('weekly-nav').style.display = 'none'; 
+    document.getElementById('totalsDisplay').style.display = 'grid'; 
     const startDate = document.getElementById('filterStartDate').value;
     const endDate = document.getElementById('filterEndDate').value;
     const chantier = document.getElementById('filterChantier').value;
@@ -448,10 +469,9 @@ function applyFilters() {
     displayHistoryList(sDate, eDate, chantier || null);
 }
 
-
 function resetFilters() {
-    document.getElementById('weekly-nav').style.display = 'block'; // Réaffiche la navigation par semaine
-    document.getElementById('totalsDisplay').style.display = 'grid'; // S'assure que les totaux sont visibles
+    document.getElementById('weekly-nav').style.display = 'block'; 
+    document.getElementById('totalsDisplay').style.display = 'grid'; 
     document.getElementById('filterStartDate').value = '';
     document.getElementById('filterEndDate').value = '';
     document.getElementById('filterChantier').selectedIndex = 0;
@@ -585,35 +605,24 @@ async function openReassignModal(pointageId) {
 
 async function duplicatePointage(pointageId, newUserId, newUserName, originalPointage) {
     try {
-        // 1. Créer une copie des données originales.
         const newData = { ...originalPointage };
-        delete newData.id; // L'ID sera auto-généré pour le nouveau document.
+        delete newData.id; 
 
-        // 2. Mettre à jour les informations du nouveau propriétaire (le collègue).
         newData.uid = newUserId;
         newData.userName = newUserName;
         
-        // 3. Ajouter une note pour la traçabilité.
         const originalNotes = originalPointage.notes || '';
         newData.notes = `(Dupliqué depuis ${currentUser.displayName}) ${originalNotes}`.trim();
-        
-        // 4. Mettre à jour la date de création pour refléter l'action de copie.
         newData.createdAt = serverTimestamp();
 
-        // 5. Ajouter le nouveau document (la copie) dans la base de données.
         const newDocRef = await addDoc(collection(db, "pointages"), newData);
 
-        // 6. Enregistrer l'action dans le journal d'audit du NOUVEAU pointage.
         await logAction(newDocRef.id, "Création par Duplication", {
             fromUser: { uid: currentUser.uid, name: currentUser.displayName },
             originalPointageId: pointageId
         });
         
-        // --- L'ÉTAPE DE SUPPRESSION DE L'ORIGINAL A ÉTÉ RETIRÉE ---
-        
         showInfoModal("Succès", `Le pointage a été dupliqué pour ${newUserName}. Votre pointage original est conservé.`);
-        // Pas besoin de rafraîchir la vue car rien ne change pour l'utilisateur actuel.
-        // resetFilters(); 
 
     } catch (error) {
         console.error("Erreur lors de la duplication:", error);
@@ -646,7 +655,10 @@ function openEntryModal(data = {}) {
     const wizardActions = document.getElementById('wizard-actions');
     const saveBtn = document.getElementById('wizardSaveBtn');
     const chantierSelect = document.getElementById('entryChantier');
-    chantierSelect.innerHTML = '<option value="">-- Choisissez --</option>' + chantiersCache.map(name => `<option value="${name}">${name}</option>`).join('');
+    
+    const activeChantiers = chantiersCache.filter(c => c.status === 'active');
+    chantierSelect.innerHTML = '<option value="">-- Choisissez --</option>' + [...new Set(activeChantiers.map(c => c.name))].map(name => `<option value="${name}">${name}</option>`).join('');
+    
     const colleaguesContainer = document.getElementById('entryColleaguesContainer');
     colleaguesContainer.innerHTML = colleaguesCache.map(name => `<label class="flex items-center gap-2"><input type="checkbox" value="${name}" name="entryColleagues" /><span>${name}</span></label>`).join('');
     
@@ -660,7 +672,12 @@ function openEntryModal(data = {}) {
         
         document.getElementById('entryId').value = data.id;
         document.getElementById('entryDate').value = new Date(data.timestamp).toISOString().split('T')[0];
+        
+        if (!activeChantiers.find(c => c.name === data.chantier)) {
+             chantierSelect.innerHTML += `<option value="${data.chantier}">${data.chantier} (Archivé)</option>`;
+        }
         chantierSelect.value = data.chantier;
+        
         document.getElementById('entryStartTime').value = new Date(data.timestamp).toTimeString().substring(0, 5);
         document.getElementById('entryEndTime').value = new Date(data.endTime).toTimeString().substring(0, 5);
         const pauseMinutes = data.pauseDurationMs ? Math.round(data.pauseDurationMs / 60000) : '';
@@ -799,19 +816,29 @@ async function saveEntry(e) {
 }
 
 function generateHistoryPDF() {
-    const dataForPdf = pointagesPourPdf;
+    let dataForPdf = [...pointagesPourPdf]; 
+
+    if (isStealthMode) {
+        const hiddenChantiersNames = chantiersCache.filter(c => c.isHideable).map(c => c.name);
+        dataForPdf = dataForPdf.filter(p => !hiddenChantiersNames.includes(p.chantier));
+    }
+
     if (dataForPdf.length === 0) {
-        showInfoModal("Information", "Il n'y a rien à télécharger pour cette période.");
+        showInfoModal("Information", "Il n'y a aucune donnée à afficher sur le PDF.");
         return;
     }
+
     const { jsPDF } = window.jspdf;
     if (!jsPDF || !jsPDF.API.autoTable) {
-        showInfoModal("Erreur", "La librairie PDF (jsPDF avec autoTable) n'a pas pu être chargée.");
+        showInfoModal("Erreur", "La librairie PDF n'a pas pu être chargée.");
         return;
     }
+
     dataForPdf.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-    const userName = targetUser.name === "Mon" ? currentUser.displayName : targetUser.name;
+    
+    // NOUVEAU : On utilise le nom du profil
+    const userName = targetUser.name; 
     
     const firstDate = new Date(dataForPdf[0].timestamp);
     const lastDate = new Date(dataForPdf[dataForPdf.length - 1].timestamp);

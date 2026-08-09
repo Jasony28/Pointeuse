@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 
 // --- MISE À JOUR DE LA VERSION (Important pour le cache) ---
-const APP_VERSION = 'v1.0.0'; 
+const APP_VERSION = 'v1.0.1'; 
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -242,15 +242,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         case 'pending': pendingContainer.style.display = 'flex'; break;
                         case 'banned': showInfoModal("Compte Banni", "Votre compte a été banni."); signOut(auth); break;
                         case 'approved':
-                            document.getElementById('currentUserDisplay').textContent = userData.displayName || user.email;
+                            // Vérification du profil actif sauvegardé
+                            const savedProfile = localStorage.getItem('currentProfileName');
+                            
                             document.getElementById('app-version-display').textContent = APP_VERSION;
                             setupNavigation();
-
                             await checkPersonalNotifications(userRef, userData);
                             checkForUpdates(userData, userRef);
 
-                            navigateTo('user-dashboard'); 
                             appContainer.style.display = 'block';
+
+                            if (savedProfile) {
+                                // Si un profil est déjà choisi, on va direct au planning
+                                document.getElementById('currentUserDisplay').textContent = savedProfile;
+                                navigateTo('user-dashboard'); 
+                            } else {
+                                // Sinon, on affiche l'écran de sélection des profils
+                                renderProfileSelection(userData);
+                            }
                             break;
                         default: showInfoModal("Erreur de Compte", "Statut inconnu."); signOut(auth);
                     }
@@ -263,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentUser = null;
             isAdmin = false;
             isMasqueradingAsUser = false;
+            localStorage.removeItem('currentProfileName'); // On vide le profil si on se déconnecte totalement
             authContainer.style.display = 'block';
             loginForm.style.display = 'block';
             registerForm.style.display = 'none';
@@ -270,7 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         loader.style.display = 'none';
     });
-    
+
     const pinModal = document.getElementById('pinModal');
     const pinForm = document.getElementById('pinForm');
     const pinInput = document.getElementById('pinInput');
@@ -431,4 +441,129 @@ export function showInfoModal(title, message) {
     document.getElementById('modalCancelBtn').textContent = 'OK';
     document.getElementById('genericModal').classList.remove('hidden');
     document.getElementById('modalCancelBtn').onclick = () => { document.getElementById('genericModal').classList.add('hidden'); };
+}
+
+// --- GESTION DES PROFILS MULTIPLES ---
+
+export async function renderProfileSelection(userData) {
+    // Si la liste des profils n'existe pas encore dans Firebase, on utilise le nom du compte principal
+    const profiles = userData.profiles || [userData.displayName];
+
+    // 1. On construit l'écran principal ET la modale cachée
+    let html = `
+        <div class="max-w-md mx-auto mt-12 text-center fade-in">
+            <h2 class="text-3xl font-bold mb-8" style="color: var(--color-text-base);">Qui pointe aujourd'hui ?</h2>
+            <div class="grid grid-cols-2 gap-6 mb-8" id="profiles-container">
+    `;
+
+    profiles.forEach(profile => {
+        const initial = profile.charAt(0).toUpperCase();
+        html += `
+            <button class="profile-btn p-6 rounded-2xl shadow-lg flex flex-col items-center justify-center transition-transform hover:scale-105" style="background-color: var(--color-surface); border: 2px solid var(--color-primary);" data-name="${profile}">
+                <div class="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-bold text-white mb-4 shadow-sm" style="background-color: var(--color-primary);">
+                    ${initial}
+                </div>
+                <span class="font-bold text-lg" style="color: var(--color-text-base);">${profile}</span>
+            </button>
+        `;
+    });
+
+    html += `
+            <button id="add-profile-btn" class="p-6 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-colors hover:bg-gray-50" style="border-color: var(--color-border);">
+                <div class="w-12 h-12 rounded-full flex items-center justify-center text-2xl mb-3" style="color: var(--color-text-muted);">➕</div>
+                <span class="font-semibold" style="color: var(--color-text-muted);">Nouveau profil</span>
+            </button>
+            </div>
+        </div>
+
+        <!-- NOUVEAU : MODAL D'AJOUT DE PROFIL -->
+        <div id="customPromptModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
+            <div class="p-6 rounded-xl shadow-2xl w-full max-w-sm transform transition-all" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="text-xl font-bold mb-2" style="color: var(--color-text-base);">Ajouter un profil</h3>
+                <p class="text-sm mb-5" style="color: var(--color-text-muted);">Entrez le prénom du nouveau collègue :</p>
+                
+                <input type="text" id="newProfileInput" placeholder="Ex: Thomas" class="w-full border p-3 rounded-lg mb-6 shadow-inner focus:outline-none focus:ring-2" style="border-color: var(--color-border); background-color: var(--color-background); color: var(--color-text-base);">
+                
+                <div class="flex justify-end gap-3">
+                    <button id="cancelProfileBtn" class="px-5 py-2.5 rounded-lg font-bold transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border); color: var(--color-text-base);">Annuler</button>
+                    <button id="confirmProfileBtn" class="text-white font-bold px-5 py-2.5 rounded-lg transition-colors shadow-md" style="background-color: var(--color-primary);">Enregistrer</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    pageContent.innerHTML = html;
+
+    // 2. Actions au clic sur un profil existant
+    document.querySelectorAll('.profile-btn').forEach(btn => {
+        btn.onclick = () => {
+            const selectedName = btn.getAttribute('data-name');
+            localStorage.setItem('currentProfileName', selectedName); // Sauvegarde le choix
+            document.getElementById('currentUserDisplay').textContent = selectedName; // Met à jour l'en-tête
+            navigateTo('user-dashboard'); // Lance le dashboard
+        };
+    });
+
+    // 3. Logique de la nouvelle modale personnalisée
+    const addBtn = document.getElementById('add-profile-btn');
+    const modal = document.getElementById('customPromptModal');
+    const input = document.getElementById('newProfileInput');
+    const cancelBtn = document.getElementById('cancelProfileBtn');
+    const confirmBtn = document.getElementById('confirmProfileBtn');
+
+    // Ouvrir la modale
+    addBtn.onclick = () => {
+        modal.classList.remove('hidden');
+        input.value = ''; // On vide le champ au cas où
+        setTimeout(() => input.focus(), 100); // Focus automatique sur le champ de texte
+    };
+
+    // Fermer la modale
+    cancelBtn.onclick = () => {
+        modal.classList.add('hidden');
+    };
+
+    // Permettre de valider avec la touche "Entrée" du clavier
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmBtn.click();
+        }
+    });
+
+    // Valider et enregistrer le profil
+    confirmBtn.onclick = async () => {
+        const newName = input.value.trim();
+        
+        if (newName !== "") {
+            confirmBtn.textContent = 'Enregistrement...';
+            confirmBtn.disabled = true;
+
+            const updatedProfiles = [...profiles, newName];
+            try {
+                // Enregistrement dans Firebase (L'import en double a été retiré ici)
+                await updateDoc(doc(db, "users", currentUser.uid), {
+                    profiles: updatedProfiles
+                });
+                
+                currentUser.profiles = updatedProfiles; // Met à jour la mémoire locale
+                renderProfileSelection(currentUser); // Recharge l'écran des profils (la modale disparaitra toute seule)
+                
+            } catch (error) {
+                showInfoModal("Erreur", "Impossible d'ajouter le profil.");
+                confirmBtn.textContent = 'Enregistrer';
+                confirmBtn.disabled = false;
+            }
+        } else {
+            // Petit effet visuel si le champ est vide
+            input.style.borderColor = 'red';
+            setTimeout(() => input.style.borderColor = 'var(--color-border)', 2000);
+        }
+    };
+}
+
+export function switchProfile() {
+    // Cette fonction sert à revenir à l'écran de choix
+    localStorage.removeItem('currentProfileName');
+    renderProfileSelection(currentUser);
 }

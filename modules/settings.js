@@ -1,6 +1,6 @@
 // DANS : modules/settings.js
 
-import { pageContent, currentUser, showInfoModal, db, themes, applyTheme, showUpdatesModal } from "../app.js";
+import { pageContent, currentUser, showInfoModal, db, themes, applyTheme, showUpdatesModal, switchProfile } from "../app.js";
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
@@ -15,11 +15,20 @@ export async function render() {
                 <p style="color: var(--color-text-muted);">Gérez vos informations de profil et les réglages de l'application.</p>
             </div>
 
+            <!-- NOUVEAU : CARTE DE CHANGEMENT DE PROFIL -->
+            <div class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="text-xl font-semibold mb-2" style="color: var(--color-text-base);">Gestion du profil</h3>
+                <p class="text-sm mb-4" style="color: var(--color-text-muted);">Vous êtes actuellement connecté en tant que <strong id="settings-profile-name" style="color: var(--color-primary);"></strong>.</p>
+                <button id="btn-switch-profile" class="px-6 py-3 rounded-lg font-bold text-white shadow-md transition-transform hover:scale-105" style="background-color: var(--color-primary);">
+                    🔄 Changer de profil
+                </button>
+            </div>
+
             <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">Mon Profil</h3>
+                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">Mon Profil Global</h3>
                 <div class="space-y-4">
                     <div>
-                        <label for="displayNameInput" class="text-sm font-medium" style="color: var(--color-text-base);">Nom d'affichage</label>
+                        <label for="displayNameInput" class="text-sm font-medium" style="color: var(--color-text-base);">Nom d'affichage (Compte principal)</label>
                         <input id="displayNameInput" type="text" value="${currentUser.displayName}" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">
                     </div>
                     <div class="text-right">
@@ -90,7 +99,7 @@ export async function render() {
             <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                  <div class="text-center">
                     <button id="logoutBtnSettings" class="bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-3 rounded-lg">
-                        Se déconnecter
+                        Se déconnecter de ${currentUser.email}
                     </button>
                 </div>
             </div>
@@ -120,7 +129,15 @@ export async function render() {
 }
 
 function setupEventListeners() {
-    // --- PROFIL ---
+    // --- GESTION DU PROFIL ---
+    const activeProfileName = localStorage.getItem('currentProfileName') || currentUser.displayName;
+    document.getElementById('settings-profile-name').textContent = activeProfileName;
+
+    document.getElementById('btn-switch-profile').onclick = () => {
+        switchProfile();
+    };
+
+    // --- PROFIL GLOBAL ---
     document.getElementById('saveProfileBtn').onclick = async () => {
         const newName = document.getElementById('displayNameInput').value.trim();
         if (newName && newName !== currentUser.displayName) {
@@ -302,8 +319,18 @@ async function fetchAndGroupPointages() {
     let totalExportMs = 0;
     let totalExportKm = 0;
 
+    // --- NOUVEAU : Filtre Javascript pour l'export ---
+    const activeProfileName = localStorage.getItem('currentProfileName') || currentUser.displayName;
+    const isAdmin = currentUser.role === 'admin';
+
     querySnapshot.forEach(doc => {
         const data = doc.data();
+        
+        // Si c'est un employé normal, on ignore les pointages des autres profils
+        if (!isAdmin && data.userName !== activeProfileName) {
+            return;
+        }
+
         if (!data.endTime) return;
 
         const start = new Date(data.timestamp);
@@ -341,6 +368,12 @@ async function fetchAndGroupPointages() {
         });
     });
     
+    // Si l'utilisateur n'a rien après filtrage
+    if (groupedData.size === 0) {
+         showInfoModal("Info", "Vous n'avez aucun pointage à exporter sur ce profil.");
+         return null;
+    }
+
     return { groupedData, totalExportMs, totalExportKm };
 }
 
@@ -356,13 +389,16 @@ async function exportUserHistoryToPDF() {
     const doc = new jsPDF('p', 'mm', 'a4');
     let currentY = 20; 
 
+    // On récupère le bon nom (Profil ou Admin)
+    const activeProfileName = localStorage.getItem('currentProfileName') || currentUser.displayName;
+
     // --- 1. ENTÊTE ---
     doc.setFontSize(18).setFont(undefined, 'bold');
     doc.text("Rapport d'Activité & Kilométrage", 14, currentY);
     currentY += 10;
 
     doc.setFontSize(11).setFont(undefined, 'normal');
-    doc.text(`Employé : ${currentUser.displayName}`, 14, currentY);
+    doc.text(`Employé : ${activeProfileName}`, 14, currentY);
     currentY += 6;
     doc.text(`Période : Historique complet au ${new Date().toLocaleDateString('fr-FR')}`, 14, currentY);
     currentY += 10;
@@ -413,8 +449,6 @@ async function exportUserHistoryToPDF() {
             }
         });
 
-        // --- CORRECTION DU BUG ICI ---
-        // Utilisation de doc.lastAutoTable.finalY qui est plus robuste sur toutes les versions
         const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : (doc.autoTable.previous ? doc.autoTable.previous.finalY : currentY + 20);
         
         // Mise à jour de la position pour éviter la superposition
@@ -426,5 +460,5 @@ async function exportUserHistoryToPDF() {
         currentY += 5;
     }
 
-    doc.save(`Historique_Pointages_${currentUser.displayName}.pdf`);
+    doc.save(`Historique_Pointages_${activeProfileName.replace(/ /g, '_')}.pdf`);
 }

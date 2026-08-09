@@ -52,6 +52,13 @@ export async function render() {
                         </div>
                     </div>
 
+                    <div class="p-3 rounded border" style="background-color: #fef2f2; border-color: #fca5a5;">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" id="chantierIsHideableInput" class="h-5 w-5 rounded border-gray-300" style="accent-color: #ef4444;">
+                            <span class="text-sm font-bold text-red-700">Chantier "Hors forfait" (Caché du PDF officiel si mode discret activé)</span>
+                        </label>
+                    </div>
+
                     <div>
                         <label class="text-sm font-medium" style="color: var(--color-text-base);">Codes & Accès</label>
                         <div class="flex items-center gap-2 mt-1">
@@ -144,6 +151,13 @@ export async function render() {
                     </div>
                  </div>
 
+                 <div class="p-3 rounded border" style="background-color: #fef2f2; border-color: #fca5a5;">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" id="editChantierIsHideable" class="h-5 w-5 rounded border-gray-300" style="accent-color: #ef4444;">
+                        <span class="text-sm font-bold text-red-700">Chantier "Hors forfait" (Caché du PDF officiel)</span>
+                    </label>
+                 </div>
+
                  <div>
                     <label class="text-sm font-medium" style="color: var(--color-text-base);">Codes</label>
                     <div class="flex items-center gap-2 mt-1">
@@ -169,7 +183,6 @@ export async function render() {
     }, 0);
 }
 
-// Fonction pour convertir l'adresse en coordonnées GPS via Mapbox
 async function geocodeAddress(address) {
     if (!address) return null;
     try {
@@ -211,18 +224,19 @@ async function loadChantiers() {
 function createChantierElement(chantier) {
     const div = document.createElement('div');
     div.className = 'p-3 border rounded flex justify-between items-center gap-2';
-    div.style.backgroundColor = 'var(--color-surface)';
-    div.style.borderColor = 'var(--color-border)';
+    div.style.backgroundColor = chantier.isHideable ? '#fef2f2' : 'var(--color-surface)'; // Légère couleur rouge si caché
+    div.style.borderColor = chantier.isHideable ? '#fca5a5' : 'var(--color-border)';
     
-    // Badge si contraintes horaires
     let timeBadge = '';
     if (chantier.fixedAppointment) {
         timeBadge = `<span class="ml-2 text-xs text-white px-2 py-0.5 rounded-full font-bold" style="background-color: #ef4444;">RDV ${chantier.fixedAppointment}</span>`;
     } else if (chantier.timeWindowStart || chantier.timeWindowEnd) {
         timeBadge = `<span class="ml-2 text-xs px-2 py-0.5 rounded-full" style="background-color: var(--color-background); color: var(--color-text-muted); border: 1px solid var(--color-border);">🕒 Horaire</span>`;
     }
+    
+    let hiddenBadge = chantier.isHideable ? `<span class="ml-2 text-xs text-red-600 font-bold">⚠️ Hors Forfait</span>` : '';
 
-    div.innerHTML = `<div class="truncate"><span class="font-semibold" style="color: var(--color-text-base);">${chantier.name}</span>${timeBadge}</div>`;
+    div.innerHTML = `<div class="truncate"><span class="font-semibold" style="color: var(--color-text-base);">${chantier.name}</span>${timeBadge}${hiddenBadge}</div>`;
     
     const buttonsWrapper = document.createElement('div');
     buttonsWrapper.className = 'flex items-center gap-2 flex-shrink-0';
@@ -272,6 +286,7 @@ function setupEventListeners() {
         const timeWindowStart = document.getElementById("timeWindowStartInput").value;
         const timeWindowEnd = document.getElementById("timeWindowEndInput").value;
         const fixedAppointment = document.getElementById("fixedAppointmentInput").value;
+        const isHideable = document.getElementById("chantierIsHideableInput").checked; // Nouveau champ
 
         if (name) {
             try {
@@ -287,6 +302,7 @@ function setupEventListeners() {
                     timeWindowStart,
                     timeWindowEnd,
                     fixedAppointment,
+                    isHideable, // Sauvegarde
                     keyboxCodes,
                     additionalInfo: document.getElementById("chantierInfoInput").value.trim(),
                     status: 'active', 
@@ -295,7 +311,7 @@ function setupEventListeners() {
                 
                 addChantierForm.reset();
                 list.innerHTML = '';
-                showInfoModal("Succès", "Chantier ajouté avec géolocalisation !");
+                showInfoModal("Succès", "Chantier ajouté !");
                 await loadChantiers();
             } catch (error) { 
                 console.error("Erreur ajout:", error); 
@@ -322,6 +338,7 @@ function setupEventListeners() {
             timeWindowStart: document.getElementById("editTimeWindowStart").value,
             timeWindowEnd: document.getElementById("editTimeWindowEnd").value,
             fixedAppointment: document.getElementById("editFixedAppointment").value,
+            isHideable: document.getElementById("editChantierIsHideable").checked, // Mise à jour
             keyboxCodes: codes,
             additionalInfo: document.getElementById('editChantierInfo').value
         };
@@ -351,6 +368,7 @@ function showDetailsModal(chantier) {
     if (chantier.fixedAppointment) timeText.push(`🔴 <strong>RDV Impératif : ${chantier.fixedAppointment}</strong>`);
     if (chantier.timeWindowStart) timeText.push(`🕒 Pas avant : ${chantier.timeWindowStart}`);
     if (chantier.timeWindowEnd) timeText.push(`🕒 Pas après : ${chantier.timeWindowEnd}`);
+    if (chantier.isHideable) timeText.push(`⚠️ <strong>Ce chantier n'apparaîtra pas sur le PDF de pointage si le mode discret est activé.</strong>`);
     
     if (timeText.length > 0) {
         timeContainer.innerHTML = timeText.join('<br>');
@@ -391,6 +409,8 @@ function showEditModal(chantier) {
     document.getElementById('editTimeWindowStart').value = chantier.timeWindowStart || '';
     document.getElementById('editTimeWindowEnd').value = chantier.timeWindowEnd || '';
     document.getElementById('editFixedAppointment').value = chantier.fixedAppointment || '';
+    
+    document.getElementById('editChantierIsHideable').checked = chantier.isHideable || false; // Coche si déjà hors forfait
 
     document.getElementById('editChantierInfo').value = chantier.additionalInfo || '';
     const list = document.getElementById('editKeyCodesList');

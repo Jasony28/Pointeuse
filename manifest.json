@@ -1,12 +1,12 @@
 {
-  "name": "Pointeuse L'Art du Propre",
-  "short_name": "Pointeuse LDPR",
+  "name": "Pointeuse ",
+  "short_name": "Pointeuse",
   "id": "/Pointeuse/",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#4f46e5",
-  "description": "Application de pointage pour L'Art du Propre Rendeux.",
+  "description": "Application de pointage .",
   "icons": [
     {
       "src": "./icons/icon-192x192.png",
