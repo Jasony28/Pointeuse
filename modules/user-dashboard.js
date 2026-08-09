@@ -21,8 +21,8 @@ export async function render() {
         <div class="max-w-4xl mx-auto space-y-8">
             <!-- Zone d'action principale : Pointage Manuel -->
             <div class="p-6 rounded-lg shadow-lg text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-bold mb-4">Prêt à enregistrer vos heures ?</h3>
-                <button id="openManualPointageBtn" class="w-full md:w-auto text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg transition-colors" style="background-color: var(--color-primary);">
+                <h3 class="text-xl font-bold mb-4" style="color: var(--color-text-base);">Prêt à enregistrer vos heures ?</h3>
+                <button id="openManualPointageBtn" class="w-full md:w-auto text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg transition-colors hover:opacity-90" style="background-color: var(--color-primary);">
                     ➕ Ajouter un pointage
                 </button>
             </div>
@@ -32,15 +32,15 @@ export async function render() {
             <div id="unread-messages-container" class="hidden transform transition-all duration-300 hover:scale-[1.01] cursor-pointer"></div>
 
             <div>
-                <h2 class="text-xl font-bold mb-2">🗓️ Mon Planning de la Semaine</h2>
+                <h2 class="text-xl font-bold mb-2" style="color: var(--color-text-base);">🗓️ Mon Planning de la Semaine</h2>
                 <div class="rounded-lg shadow-sm p-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div class="flex justify-between items-center">
-                        <button id="prevWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);"><</button>
+                        <button id="prevWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80 font-bold" style="background-color: var(--color-background); color: var(--color-text-base);"><</button>
                         <div class="text-center"> 
-                            <div id="currentPeriodDisplay" class="font-semibold text-lg"></div>
+                            <div id="currentPeriodDisplay" class="font-semibold text-lg" style="color: var(--color-text-base);"></div>
                             <div id="currentWeekTotalHours" class="text-sm font-bold" style="color: var(--color-primary);"></div>
                         </div>
-                        <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">></button>
+                        <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80 font-bold" style="background-color: var(--color-background); color: var(--color-text-base);">></button>
                     </div>
                 </div>
                 <div id="schedule-grid" class="grid grid-cols-1 md:grid-cols-7 gap-2 mt-4"></div>
@@ -50,21 +50,21 @@ export async function render() {
         <!-- MODAL DE POINTAGE MANUEL -->
         <div id="manualPointageModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
             <div class="p-6 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-bold mb-4">Ajouter un pointage</h3>
+                <h3 class="text-xl font-bold mb-4" style="color: var(--color-text-base);">Ajouter un pointage</h3>
                 <form id="manualPointageForm" class="space-y-5">
                     
                     <!-- 1. Les Heures -->
                     <div class="p-3 rounded border" style="background-color: var(--color-background); border-color: var(--color-border);">
                         <label class="block text-sm font-bold mb-2" style="color: var(--color-primary);">1. Date et Heures</label>
-                        <input type="date" id="pointageDate" class="w-full border p-2 rounded mb-3" required>
+                        <input type="date" id="pointageDate" class="w-full border p-2 rounded mb-3 focus:ring-2 focus:outline-none" style="background-color: var(--color-surface); border-color: var(--color-border); color: var(--color-text-base);" required>
                         <div class="flex gap-4">
                             <div class="w-1/2">
-                                <label class="text-xs font-medium text-gray-500">Heure d'arrivée</label>
-                                <input type="time" id="pointageStartTime" class="w-full border p-2 rounded mt-1" required>
+                                <label class="text-xs font-medium" style="color: var(--color-text-muted);">Heure d'arrivée</label>
+                                <input type="time" id="pointageStartTime" class="w-full border p-2 rounded mt-1 focus:ring-2 focus:outline-none" style="background-color: var(--color-surface); border-color: var(--color-border); color: var(--color-text-base);" required>
                             </div>
                             <div class="w-1/2">
-                                <label class="text-xs font-medium text-gray-500">Heure de départ</label>
-                                <input type="time" id="pointageEndTime" class="w-full border p-2 rounded mt-1" required>
+                                <label class="text-xs font-medium" style="color: var(--color-text-muted);">Heure de départ</label>
+                                <input type="time" id="pointageEndTime" class="w-full border p-2 rounded mt-1 focus:ring-2 focus:outline-none" style="background-color: var(--color-surface); border-color: var(--color-border); color: var(--color-text-base);" required>
                             </div>
                         </div>
                     </div>
@@ -72,39 +72,39 @@ export async function render() {
                     <!-- 2. Le Chantier -->
                     <div class="p-3 rounded border" style="background-color: var(--color-background); border-color: var(--color-border);">
                         <label class="block text-sm font-bold mb-2" style="color: var(--color-primary);">2. Lieu du chantier</label>
-                        <select id="pointageChantierSelect" class="w-full border p-2 rounded" required></select>
+                        <select id="pointageChantierSelect" class="w-full border p-2 rounded focus:ring-2 focus:outline-none" style="background-color: var(--color-surface); border-color: var(--color-border); color: var(--color-text-base);" required></select>
                     </div>
 
                     <!-- 3. Les Personnes -->
                     <div class="p-3 rounded border" style="background-color: var(--color-background); border-color: var(--color-border);">
-                        <label class="block text-sm font-bold mb-2" style="color: var(--color-primary);">3. Équipe présente</label>
+                        <label class="block text-sm font-bold mb-2" style="color: var(--color-primary);">3. Uniquement toi</label>
                         
                         <!-- Liste des personnes ajoutées -->
-                        <div id="manualColleaguesContainer" class="max-h-32 overflow-y-auto space-y-1 empty:hidden"></div>
+                        <div id="manualColleaguesContainer" class="max-h-32 overflow-y-auto space-y-2 empty:hidden"></div>
                         
                         <!-- Ajout manuel obligatoire -->
-                        <div class="flex gap-2 mt-2">
-                            <input type="text" id="newPersonName" placeholder="Taper un nom ici..." class="w-full border p-2 rounded text-sm">
-                            <button type="button" id="addNewPersonBtn" class="px-3 rounded text-sm font-bold text-white transition-colors" style="background-color: var(--color-primary);">Ajouter</button>
+                        <div class="flex gap-2 mt-3">
+                            <input type="text" id="newPersonName" placeholder="Taper un nom ici..." class="w-full border p-2 rounded text-sm focus:ring-2 focus:outline-none" style="background-color: var(--color-surface); border-color: var(--color-border); color: var(--color-text-base);">
+                            <button type="button" id="addNewPersonBtn" class="px-4 py-2 rounded text-sm font-bold text-white transition-colors hover:opacity-90" style="background-color: var(--color-primary);">Ajouter</button>
                         </div>
                     </div>
 
                     <div class="pt-2">
-                        <label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-50">
+                        <label class="flex items-center gap-3 cursor-pointer p-3 rounded border transition-colors" style="background-color: var(--color-background); border-color: var(--color-border);">
                             <input type="checkbox" id="isDriverCheckbox" class="h-5 w-5 rounded border-gray-300"/>
-                            <span class="text-sm font-medium">Je suis le conducteur (pour le calcul des km)</span>
+                            <span class="text-sm font-medium" style="color: var(--color-text-base);">Je suis le conducteur (pour le calcul des km)</span>
                         </label>
                     </div>
 
                     <!-- 4. Note Facultative -->
                     <div class="p-3 rounded border" style="background-color: var(--color-background); border-color: var(--color-border);">
                         <label class="block text-sm font-bold mb-2" style="color: var(--color-primary);">4. Note (facultatif)</label>
-                        <textarea id="pointageNotes" placeholder="Problème rencontré, matériel manquant, retard..." class="w-full border p-2 rounded h-20"></textarea>
+                        <textarea id="pointageNotes" placeholder="Problème rencontré, matériel manquant, retard..." class="w-full border p-2 rounded h-20 focus:ring-2 focus:outline-none" style="background-color: var(--color-surface); border-color: var(--color-border); color: var(--color-text-base);"></textarea>
                     </div>
 
-                    <div class="flex justify-end gap-4 pt-4 border-t">
-                        <button type="button" id="cancelManualPointage" class="px-4 py-2 rounded font-bold" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
-                        <button type="submit" id="submitPointageBtn" class="text-white font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-primary);">Enregistrer le pointage</button>
+                    <div class="flex justify-end gap-4 pt-4 border-t" style="border-color: var(--color-border);">
+                        <button type="button" id="cancelManualPointage" class="px-4 py-2 rounded font-bold" style="background-color: var(--color-background); border: 1px solid var(--color-border); color: var(--color-text-base);">Annuler</button>
+                        <button type="submit" id="submitPointageBtn" class="text-white font-bold px-6 py-2 rounded transition-colors hover:opacity-90" style="background-color: var(--color-primary);">Enregistrer le pointage</button>
                     </div>
                 </form>
             </div>
@@ -113,25 +113,25 @@ export async function render() {
         <div id="detailsModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-20 p-4">
             <div class="p-6 rounded-lg shadow-xl w-full max-w-lg space-y-4 relative" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <button id="closeDetailsBtn" class="absolute top-2 right-3 text-2xl font-bold" style="color: var(--color-text-muted);">×</button>
-                <h3 id="modalChantierName" class="text-2xl font-bold border-b pb-2" style="border-color: var(--color-border);"></h3>
+                <h3 id="modalChantierName" class="text-2xl font-bold border-b pb-2" style="border-color: var(--color-border); color: var(--color-text-base);"></h3>
                 <div>
                     <h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">ADRESSE</h4>
                     <p id="modalChantierAddress" class="hover:underline text-lg cursor-pointer" style="color: var(--color-primary);"></p>
                 </div>
-                <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">HEURES PRÉVUES</h4><p id="modalChantierHours" class="text-lg"></p></div>
-                <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">CODES & ACCÈS</h4><div id="modalChantierKeybox" class="text-lg"></div></div>
-                <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">INFOS SUPPLÉMENTAIRES</h4><p id="modalChantierInfo" class="text-lg" style="white-space: pre-wrap; overflow-wrap: break-word;"></p></div>
+                <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">HEURES PRÉVUES</h4><p id="modalChantierHours" class="text-lg" style="color: var(--color-text-base);"></p></div>
+                <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">CODES & ACCÈS</h4><div id="modalChantierKeybox" class="text-lg" style="color: var(--color-text-base);"></div></div>
+                <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">INFOS SUPPLÉMENTAIRES</h4><p id="modalChantierInfo" class="text-lg" style="white-space: pre-wrap; overflow-wrap: break-word; color: var(--color-text-base);"></p></div>
             </div>
         </div>
         
         <div id="navigationModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-40 p-4">
-            <div class="p-6 rounded-lg shadow-xl w-full max-w-xs text-center" style="background-color: var(--color-surface);">
-                <h3 class="text-xl font-bold mb-5">Ouvrir l'itinéraire</h3>
+            <div class="p-6 rounded-lg shadow-xl w-full max-w-xs text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="text-xl font-bold mb-5" style="color: var(--color-text-base);">Ouvrir l'itinéraire</h3>
                 <div class="space-y-3">
                     <a id="navGoogleMaps" href="#" target="_blank" rel="noopener noreferrer" class="block w-full text-white font-semibold py-3 px-4 rounded-lg" style="background-color: #4285F4;">Google Maps</a>
                     <a id="navWaze" href="#" target="_blank" rel="noopener noreferrer" class="block w-full text-white font-semibold py-3 px-4 rounded-lg" style="background-color: #33CCFF;">Waze</a>
                 </div>
-                <button id="closeNavModalBtn" class="mt-6 w-full font-semibold py-2 px-4 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
+                <button id="closeNavModalBtn" class="mt-6 w-full font-semibold py-2 px-4 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border); color: var(--color-text-base);">Annuler</button>
             </div>
         </div>
     `;
@@ -214,8 +214,18 @@ async function openManualModal() {
     form.reset();
     dateInput.value = new Date().toISOString().split('T')[0];
     
-    // On vide complètement la liste des collègues, pour obliger à les écrire
+    // On vide complètement la liste des collègues
     colleaguesContainer.innerHTML = '';
+
+    // --- NOUVEAU : Auto-sélection du profil actif ---
+    const activeProfileName = localStorage.getItem('currentProfileName') || currentUser.displayName;
+    if (activeProfileName) {
+        const label = document.createElement('label');
+        label.className = 'flex items-center gap-2 p-2 mb-1 rounded bg-green-100 w-full cursor-pointer transition-colors';
+        label.innerHTML = `<input type="checkbox" value="${activeProfileName}" name="colleagues" checked class="w-4 h-4 text-blue-600 rounded" /><span class="font-bold text-green-800">${activeProfileName} (Moi)</span>`;
+        colleaguesContainer.appendChild(label);
+    }
+    // ------------------------------------------------
     
     chantierSelect.innerHTML = '<option>Chargement...</option>';
     modal.classList.remove('hidden');
@@ -327,9 +337,12 @@ async function submitManualPointage(e) {
         endDateTime.setDate(endDateTime.getDate() + 1);
     }
 
+    // --- NOUVEAU : Récupère le nom du profil sélectionné ---
+    const activeProfileName = localStorage.getItem('currentProfileName') || currentUser.displayName;
+
     const newPointageData = {
         uid: currentUser.uid, 
-        userName: currentUser.displayName, 
+        userName: activeProfileName, // <-- C'est ici qu'on utilise le bon profil
         chantier: chantierName, 
         chantierId: chantierId,
         colleagues: selectedColleagues,

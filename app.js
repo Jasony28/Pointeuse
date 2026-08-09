@@ -1,13 +1,11 @@
 import { updatesLog } from './modules/updates-data.js';
 
-// --- MISE À JOUR DE LA VERSION (Important pour le cache) ---
-const APP_VERSION = 'v1.0.1'; 
+const APP_VERSION = 'v1.0.2'; 
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, deleteField, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
-// --- GESTION DES THÈMES ---
 export const themes = {
     neutre: { name: 'Neutre', preview: '#e2e8f0', colors: { '--color-primary': '#475569', '--color-primary-hover': '#334155', '--color-background': '#f1f5f9', '--color-surface': '#ffffff', '--color-text-base': '#0f172a', '--color-text-muted': '#475569', '--color-border': '#e2e8f0', } },
     magenta: { name: 'Magenta', preview: '#f5d0fe', colors: { '--color-primary': '#d946ef', '--color-primary-hover': '#c026d3', '--color-background': '#fdf4ff', '--color-surface': '#fae8ff', '--color-text-base': '#581c87', '--color-text-muted': '#86198f', '--color-border': '#f5d0fe', } },
@@ -28,7 +26,6 @@ export function applyTheme(themeName) {
 }
 applyTheme(localStorage.getItem('appTheme') || 'neutre');
 
-// --- CONFIGURATION FIREBASE (Mise à jour pour L'Art du Propre) ---
 const firebaseConfig = {
   apiKey: "AIzaSyDxgyFf9O-vPMXTo3ryx7QH7evmQcYGmlM",
   authDomain: "pointeuse-ldpr.firebaseapp.com",
@@ -43,7 +40,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 export const db = initializeFirestore(app, { cacheSizeBytes: CACHE_SIZE_UNLIMITED });
 
-// --- VARIABLES GLOBALES ---
 export const pageContent = document.getElementById('page-content');
 export let currentUser = null;
 export let isAdmin = false;
@@ -58,7 +54,6 @@ export function isEffectiveAdmin() {
     return isAdmin && !isMasqueradingAsUser;
 }
 
-// --- CONFIGURATION DES ONGLETS ---
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
     { id: 'user-leave', name: 'Mes Congés' },
@@ -83,7 +78,6 @@ const adminTabs = [
     { id: 'admin-team', name: 'Équipe' },
 ];
 
-// --- LOGIQUE DE NAVIGATION ---
 function toggleView() {
     isMasqueradingAsUser = !isMasqueradingAsUser;
     setupNavigation();
@@ -160,7 +154,6 @@ export async function navigateTo(pageId, params = {}) {
     }, 200);
 }
 
-// --- INITIALISATION AU CHARGEMENT ---
 document.addEventListener('DOMContentLoaded', () => {
     genericModal = document.getElementById('genericModal');
     
@@ -242,22 +235,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         case 'pending': pendingContainer.style.display = 'flex'; break;
                         case 'banned': showInfoModal("Compte Banni", "Votre compte a été banni."); signOut(auth); break;
                         case 'approved':
-                            // Vérification du profil actif sauvegardé
                             const savedProfile = localStorage.getItem('currentProfileName');
                             
                             document.getElementById('app-version-display').textContent = APP_VERSION;
                             setupNavigation();
                             await checkPersonalNotifications(userRef, userData);
-                            checkForUpdates(userData, userRef);
 
                             appContainer.style.display = 'block';
 
                             if (savedProfile) {
-                                // Si un profil est déjà choisi, on va direct au planning
                                 document.getElementById('currentUserDisplay').textContent = savedProfile;
                                 navigateTo('user-dashboard'); 
+                                checkForUpdates(userData, userRef, savedProfile);
                             } else {
-                                // Sinon, on affiche l'écran de sélection des profils
                                 renderProfileSelection(userData);
                             }
                             break;
@@ -272,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentUser = null;
             isAdmin = false;
             isMasqueradingAsUser = false;
-            localStorage.removeItem('currentProfileName'); // On vide le profil si on se déconnecte totalement
+            localStorage.removeItem('currentProfileName'); 
             authContainer.style.display = 'block';
             loginForm.style.display = 'block';
             registerForm.style.display = 'none';
@@ -341,8 +331,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// --- FONCTIONS UTILITAIRES ---
-
 async function checkPersonalNotifications(userRef, userData) {
     if (userData.pendingChanges && userData.pendingChanges.length > 0) {
         const changesByDay = userData.pendingChanges.reduce((acc, change) => {
@@ -369,7 +357,7 @@ async function checkPersonalNotifications(userRef, userData) {
     }
 }
 
-export function showUpdatesModal(updatesToShow, callbackOnClose = null) {
+export function showUpdatesModal(updatesToShow, callbackOnClose = null, requireAcknowledge = false) {
     const updatesModal = document.getElementById('updatesModal');
     const updatesContent = document.getElementById('updates-content');
     const closeUpdatesBtn = document.getElementById('closeUpdatesBtn');
@@ -381,7 +369,7 @@ export function showUpdatesModal(updatesToShow, callbackOnClose = null) {
 
     if (!updatesToShow || updatesToShow.length === 0) return;
 
-    updatesContent.innerHTML = updatesToShow.map(update => `
+    let html = updatesToShow.map(update => `
         <div>
             <h4 class="font-bold text-lg">${update.version} <span class="text-sm font-normal" style="color: var(--color-text-muted);">- ${update.date}</span></h4>
             <ul class="list-disc list-inside mt-2 space-y-1 pl-2">
@@ -389,10 +377,47 @@ export function showUpdatesModal(updatesToShow, callbackOnClose = null) {
             </ul>
         </div>
     `).join('<hr class="my-4" style="border-color: var(--color-border);">');
-    
+
+    if (requireAcknowledge) {
+        html += `
+            <div class="mt-6 p-4 rounded-lg shadow-inner" style="background-color: var(--color-background); border: 2px dashed var(--color-primary);">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" id="acknowledgeUpdateCheck" class="w-6 h-6 rounded border-gray-300" style="accent-color: var(--color-primary);">
+                    <span class="font-bold text-sm" style="color: var(--color-text-base);">J'ai lu et compris ces changements obligatoires.</span>
+                </label>
+            </div>
+        `;
+        
+        closeUpdatesBtn.disabled = true;
+        closeUpdatesBtn.style.opacity = '0.5';
+        closeUpdatesBtn.style.cursor = 'not-allowed';
+    } else {
+        closeUpdatesBtn.disabled = false;
+        closeUpdatesBtn.style.opacity = '1';
+        closeUpdatesBtn.style.cursor = 'pointer';
+    }
+
+    updatesContent.innerHTML = html;
     updatesModal.classList.remove('hidden');
 
+    if (requireAcknowledge) {
+        const check = document.getElementById('acknowledgeUpdateCheck');
+        check.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                closeUpdatesBtn.disabled = false;
+                closeUpdatesBtn.style.opacity = '1';
+                closeUpdatesBtn.style.cursor = 'pointer';
+            } else {
+                closeUpdatesBtn.disabled = true;
+                closeUpdatesBtn.style.opacity = '0.5';
+                closeUpdatesBtn.style.cursor = 'not-allowed';
+            }
+        });
+    }
+
     closeUpdatesBtn.onclick = () => {
+        if (requireAcknowledge && !document.getElementById('acknowledgeUpdateCheck').checked) return;
+
         updatesModal.classList.add('hidden');
         if (callbackOnClose) {
             callbackOnClose();
@@ -400,22 +425,29 @@ export function showUpdatesModal(updatesToShow, callbackOnClose = null) {
     };
 }
 
-function checkForUpdates(userData, userRef) {
-    const lastSeenVersion = userData.lastSeenAppVersion; 
+function checkForUpdates(userData, userRef, profileName) {
+    if (!profileName) return; 
+    
+    const seenVersions = userData.lastSeenAppVersions || {};
+    const lastSeenVersion = seenVersions[profileName] || 'v0.0.0'; 
     const currentVersion = APP_VERSION;
 
     if (lastSeenVersion !== currentVersion) {
-        const updatesToShow = updatesLog ? updatesLog.filter(u => u.version > (lastSeenVersion || 'v0.0.0')) : [];
+        const updatesToShow = updatesLog ? updatesLog.filter(u => u.version > lastSeenVersion) : [];
         
         if (updatesToShow.length > 0) {
             const markVersionAsSeen = async () => {
                 try {
-                    await updateDoc(userRef, { lastSeenAppVersion: currentVersion });
+                    const updatedVersions = { ...seenVersions };
+                    updatedVersions[profileName] = currentVersion;
+                    
+                    await updateDoc(userRef, { lastSeenAppVersions: updatedVersions });
+                    currentUser.lastSeenAppVersions = updatedVersions; 
                 } catch (error) {
-                    console.error("Impossible de mettre à jour la version vue par l'utilisateur:", error);
+                    console.error("Impossible de mettre à jour la version vue:", error);
                 }
             };
-            showUpdatesModal(updatesToShow, markVersionAsSeen);
+            showUpdatesModal(updatesToShow, markVersionAsSeen, true); 
         }
     }
 }
@@ -443,13 +475,9 @@ export function showInfoModal(title, message) {
     document.getElementById('modalCancelBtn').onclick = () => { document.getElementById('genericModal').classList.add('hidden'); };
 }
 
-// --- GESTION DES PROFILS MULTIPLES ---
-
 export async function renderProfileSelection(userData) {
-    // Si la liste des profils n'existe pas encore dans Firebase, on utilise le nom du compte principal
     const profiles = userData.profiles || [userData.displayName];
 
-    // 1. On construit l'écran principal ET la modale cachée
     let html = `
         <div class="max-w-md mx-auto mt-12 text-center fade-in">
             <h2 class="text-3xl font-bold mb-8" style="color: var(--color-text-base);">Qui pointe aujourd'hui ?</h2>
@@ -476,7 +504,6 @@ export async function renderProfileSelection(userData) {
             </div>
         </div>
 
-        <!-- NOUVEAU : MODAL D'AJOUT DE PROFIL -->
         <div id="customPromptModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
             <div class="p-6 rounded-xl shadow-2xl w-full max-w-sm transform transition-all" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <h3 class="text-xl font-bold mb-2" style="color: var(--color-text-base);">Ajouter un profil</h3>
@@ -494,36 +521,33 @@ export async function renderProfileSelection(userData) {
 
     pageContent.innerHTML = html;
 
-    // 2. Actions au clic sur un profil existant
     document.querySelectorAll('.profile-btn').forEach(btn => {
         btn.onclick = () => {
             const selectedName = btn.getAttribute('data-name');
-            localStorage.setItem('currentProfileName', selectedName); // Sauvegarde le choix
-            document.getElementById('currentUserDisplay').textContent = selectedName; // Met à jour l'en-tête
-            navigateTo('user-dashboard'); // Lance le dashboard
+            localStorage.setItem('currentProfileName', selectedName); 
+            document.getElementById('currentUserDisplay').textContent = selectedName; 
+            navigateTo('user-dashboard'); 
+            
+            checkForUpdates(currentUser, doc(db, "users", currentUser.uid), selectedName);
         };
     });
 
-    // 3. Logique de la nouvelle modale personnalisée
     const addBtn = document.getElementById('add-profile-btn');
     const modal = document.getElementById('customPromptModal');
     const input = document.getElementById('newProfileInput');
     const cancelBtn = document.getElementById('cancelProfileBtn');
     const confirmBtn = document.getElementById('confirmProfileBtn');
 
-    // Ouvrir la modale
     addBtn.onclick = () => {
         modal.classList.remove('hidden');
-        input.value = ''; // On vide le champ au cas où
-        setTimeout(() => input.focus(), 100); // Focus automatique sur le champ de texte
+        input.value = ''; 
+        setTimeout(() => input.focus(), 100); 
     };
 
-    // Fermer la modale
     cancelBtn.onclick = () => {
         modal.classList.add('hidden');
     };
 
-    // Permettre de valider avec la touche "Entrée" du clavier
     input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -531,7 +555,6 @@ export async function renderProfileSelection(userData) {
         }
     });
 
-    // Valider et enregistrer le profil
     confirmBtn.onclick = async () => {
         const newName = input.value.trim();
         
@@ -541,13 +564,12 @@ export async function renderProfileSelection(userData) {
 
             const updatedProfiles = [...profiles, newName];
             try {
-                // Enregistrement dans Firebase (L'import en double a été retiré ici)
                 await updateDoc(doc(db, "users", currentUser.uid), {
                     profiles: updatedProfiles
                 });
                 
-                currentUser.profiles = updatedProfiles; // Met à jour la mémoire locale
-                renderProfileSelection(currentUser); // Recharge l'écran des profils (la modale disparaitra toute seule)
+                currentUser.profiles = updatedProfiles; 
+                renderProfileSelection(currentUser); 
                 
             } catch (error) {
                 showInfoModal("Erreur", "Impossible d'ajouter le profil.");
@@ -555,7 +577,6 @@ export async function renderProfileSelection(userData) {
                 confirmBtn.disabled = false;
             }
         } else {
-            // Petit effet visuel si le champ est vide
             input.style.borderColor = 'red';
             setTimeout(() => input.style.borderColor = 'var(--color-border)', 2000);
         }
@@ -563,7 +584,6 @@ export async function renderProfileSelection(userData) {
 }
 
 export function switchProfile() {
-    // Cette fonction sert à revenir à l'écran de choix
     localStorage.removeItem('currentProfileName');
     renderProfileSelection(currentUser);
 }
