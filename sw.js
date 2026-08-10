@@ -5,7 +5,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-ldpr-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v1.0.2'; 
+const APP_VERSION = 'v1.0.3'; 
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },

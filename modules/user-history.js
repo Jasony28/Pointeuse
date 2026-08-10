@@ -580,23 +580,38 @@ async function openReassignModal(pointageId) {
     }
 
     reassignModal.dataset.pointageId = pointageId;
-    userSelect.innerHTML = '<option>Chargement des utilisateurs...</option>';
+    userSelect.innerHTML = '<option>Chargement des profils...</option>';
     reassignConfirmBtn.disabled = true;
 
     try {
+        // On récupère tous les utilisateurs approuvés
         const users = await getUsers(true);
-        const otherUsers = users.filter(user => user.uid !== pointageToReassign.uid);
+        let optionsHTML = '';
 
-        if (otherUsers.length === 0) {
-            userSelect.innerHTML = '<option>Aucun autre utilisateur trouvé.</option>';
+        users.forEach(user => {
+            // On récupère les profils du compte (ou son displayName par défaut)
+            const profiles = user.profiles || [user.displayName];
+            
+            profiles.forEach(profileName => {
+                // Optionnel : On évite de reproposer exactement le profil qui possède déjà le pointage actuel
+                if (!(user.uid === pointageToReassign.uid && profileName === pointageToReassign.userName)) {
+                    optionsHTML += `
+                        <option value="${user.uid}" data-name="${profileName}">
+                            👤 ${profileName} (${user.email})
+                        </option>
+                    `;
+                }
+            });
+        });
+
+        if (optionsHTML === '') {
+            userSelect.innerHTML = '<option>Aucun autre profil disponible.</option>';
         } else {
-            userSelect.innerHTML = otherUsers
-                .map(user => `<option value="${user.uid}" data-name="${user.displayName}">${user.displayName}</option>`)
-                .join('');
+            userSelect.innerHTML = '<option value="" disabled selected>-- Choisissez un profil --</option>' + optionsHTML;
             reassignConfirmBtn.disabled = false;
         }
     } catch (error) {
-        console.error("Erreur lors de la récupération des utilisateurs:", error);
+        console.error("Erreur lors de la récupération des profils:", error);
         userSelect.innerHTML = '<option>Erreur de chargement.</option>';
     }
     
