@@ -1,5 +1,16 @@
 export const updatesLog = [
     {
+        version: 'v1.1.0',
+        date: '13 août 2026',
+        changes: [
+            "🚀 **Chrono au centre** : Nouveau design avec un grand bouton central pour pointer plus vite.",
+            "⚡ **Pointage ultra-rapide** : Options 'Conducteur' et 'Collègues' supprimées. Vous choisissez juste le chantier et c'est parti !",
+            "📝 **Saisie manuelle** : L'ajout d'heures en cas d'oubli est maintenant un lien discret sous le chrono.",
+            "👑 **Admin - Visibilité** : Ajout de badges prénoms dans l'historique et suivi en direct 100% compatible avec les multi-profils.",
+            "🐛 **Bugs corrigés** : La suppression de profils et de pointages refonctionne normalement."
+        ]
+    },
+    {
         version: 'v1.0.1',
         date: '9 août 2026',
         changes: [
@@ -11,5 +22,5 @@ export const updatesLog = [
             "🔄 **Changer de collègue** : Vous voulez passer le téléphone à un collègue pour qu'il pointe ? Allez dans l'onglet **Paramètres** et cliquez sur le nouveau bouton **Changer de profil** sans avoir besoin de vous déconnecter.",
             "📊 **Historique Individuel** : Votre historique de pointages et de trajets est maintenant strictement personnel. Vous ne verrez que vos propres heures, même si vous partagez le compte !"
         ]
-    },
+    }
 ];

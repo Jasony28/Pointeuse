@@ -1,5 +1,3 @@
-// DANS : modules/user-history.js
-
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, isStealthMode } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
@@ -8,8 +6,8 @@ import { getUsers } from "./data-service.js";
 let currentWeekOffset = 0;
 let currentCalendarDate = new Date();
 let targetUser = null;
+let targetUserNameFilter = null; 
 let chantiersCache = [];
-let colleaguesCache = [];
 let pointagesPourPdf = [];
 let allPointages = [];
 let entryWizardStep = 1;
@@ -41,69 +39,76 @@ async function logAction(pointageId, action, details = {}) {
 export async function render(params = {}) {
     const activeProfileName = localStorage.getItem('currentProfileName') || currentUser.displayName;
     
-    // NOUVEAU : On utilise le nom du profil actif pour l'affichage au lieu de "Mon"
-    targetUser = (params.userId && currentUser.role === 'admin') 
-        ? { uid: params.userId, name: params.userName } 
-        : { uid: currentUser.uid, name: activeProfileName };
+    // 🔥 LE CORRECTIF EST ICI 🔥
+    // Si c'est l'admin qui regarde, on récupère l'ID du compte mais on ne filtre PAS par le prénom complet.
+    // L'admin verra ainsi tous les profils associés à ce compte e-mail.
+    if (params.userId && currentUser.role === 'admin') {
+        targetUser = { uid: params.userId, name: params.userName || "ce compte" };
+        targetUserNameFilter = null; // On force à null pour voir tous les profils de l'employé
+    } else {
+        targetUser = { uid: currentUser.uid, name: activeProfileName };
+        targetUserNameFilter = activeProfileName; // L'employé ne voit QUE son profil
+    }
 
     pageContent.innerHTML = `
         <div class="max-w-5xl mx-auto">
             <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
-                <h2 id="history-title" class="text-2xl font-bold">Historique de ${targetUser.name}</h2>
+                <h2 id="history-title" class="text-2xl font-bold" style="color: var(--color-text-base);">Historique de ${targetUser.name}</h2>
                 <div class="flex items-center gap-2">
-                    <div id="view-toggle" class="p-1 rounded-lg flex" style="background-color: var(--color-background);">
+                    <div id="view-toggle" class="p-1 rounded-lg flex border" style="background-color: var(--color-background); border-color: var(--color-border);">
                         <button id="showListViewBtn" class="px-3 py-1 text-sm rounded-md font-semibold view-toggle-btn active">Liste</button>
                         <button id="showCalendarViewBtn" class="px-3 py-1 text-sm rounded-md font-semibold view-toggle-btn">Calendrier</button>
                     </div>
                     ${(targetUser.uid === currentUser.uid || currentUser.role === 'admin') ? `
-                    <button id="downloadPdfBtn" class="text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-opacity" style="background-color: var(--color-primary);">PDF</button>
+                    <button id="downloadPdfBtn" class="text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-opacity" style="background-color: var(--color-primary);">📄 PDF</button>
                     ` : ''}
                 </div>
             </div>
 
             <div id="filters-container" class="p-4 rounded-lg mb-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <button id="toggleFiltersBtn" class="w-full font-bold py-2 px-4 rounded text-left flex items-center gap-2" style="background-color: var(--color-background); border: 1px solid var(--color-border);">
+                <button id="toggleFiltersBtn" class="w-full font-bold py-2 px-4 rounded text-left flex items-center gap-2" style="background-color: var(--color-background); border: 1px solid var(--color-border); color: var(--color-text-base);">
                     🔍 Affiner la recherche
                 </button>
                 <div id="filters-content" class="hidden mt-4">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                         <div>
-                            <label for="filterStartDate" class="text-sm font-medium">Date de début</label>
-                            <input type="date" id="filterStartDate" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
+                            <label for="filterStartDate" class="text-sm font-medium" style="color: var(--color-text-muted);">Date de début</label>
+                            <input type="date" id="filterStartDate" class="w-full border p-2 rounded mt-1 focus:ring-2 focus:outline-none" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">
                         </div>
                         <div>
-                            <label for="filterEndDate" class="text-sm font-medium">Date de fin</label>
-                            <input type="date" id="filterEndDate" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
+                            <label for="filterEndDate" class="text-sm font-medium" style="color: var(--color-text-muted);">Date de fin</label>
+                            <input type="date" id="filterEndDate" class="w-full border p-2 rounded mt-1 focus:ring-2 focus:outline-none" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">
                         </div>
                         <div>
-                            <label for="filterChantier" class="text-sm font-medium">Chantier</label>
-                            <select id="filterChantier" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);"></select>
+                            <label for="filterChantier" class="text-sm font-medium" style="color: var(--color-text-muted);">Chantier</label>
+                            <select id="filterChantier" class="w-full border p-2 rounded mt-1 focus:ring-2 focus:outline-none" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);"></select>
                         </div>
                         <div class="flex gap-2">
-                            <button id="applyFiltersBtn" class="w-full text-white font-bold px-4 py-2 rounded" style="background-color: var(--color-primary);">Filtrer</button>
-                            <button id="resetFiltersBtn" class="w-full px-4 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);" title="Réinitialiser">↻</button>
+                            <button id="applyFiltersBtn" class="w-full text-white font-bold px-4 py-2 rounded transition-opacity hover:opacity-90" style="background-color: var(--color-primary);">Filtrer</button>
+                            <button id="resetFiltersBtn" class="w-full px-4 py-2 rounded font-bold border transition-colors hover:bg-opacity-80" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);" title="Réinitialiser">↻</button>
                         </div>
                     </div>
                 </div>
             </div>
+            
             <div id="list-view">
-                <div class="rounded-lg shadow-sm p-4 mb-4" id="weekly-nav" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <div class="rounded-lg shadow-sm p-4 mb-4 border" id="weekly-nav" style="background-color: var(--color-surface); border-color: var(--color-border);">
                     <div class="flex justify-between items-center">
-                        <button id="prevWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&lt;</button>
-                        <div id="currentPeriodDisplay" class="text-center font-semibold text-lg"></div>
-                        <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&gt;</button>
+                        <button id="prevWeekBtn" class="px-4 py-2 rounded-lg font-bold hover:opacity-80 transition-opacity border" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">&lt;</button>
+                        <div id="currentPeriodDisplay" class="text-center font-semibold text-lg" style="color: var(--color-text-base);"></div>
+                        <button id="nextWeekBtn" class="px-4 py-2 rounded-lg font-bold hover:opacity-80 transition-opacity border" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">&gt;</button>
                     </div>
                 </div>
-                <div id="totalsDisplay" class="rounded-lg shadow-sm p-4 mb-4 text-center text-xl font-bold grid grid-cols-1 md:grid-cols-2 gap-2" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
+                <div id="totalsDisplay" class="rounded-lg shadow-sm p-4 mb-4 text-center text-xl font-bold grid grid-cols-1 md:grid-cols-2 gap-2 border" style="background-color: var(--color-surface); border-color: var(--color-border);"></div>
                 <div id="historyList" class="space-y-4"></div>
             </div>
 
             <div id="calendar-view" class="hidden">
-                 <div class="rounded-lg shadow-sm p-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                 <div class="rounded-lg shadow-sm p-4 border" style="background-color: var(--color-surface); border-color: var(--color-border);">
                     <div id="calendar-header" class="flex justify-between items-center mb-4">
-                        <button id="prevMonthBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&lt;</button>
-                        <h3 id="calendarMonthYear" class="text-xl font-bold"></h3>
-                        <button id="nextMonthBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&gt;</button>
+                        <button id="prevMonthBtn" class="px-4 py-2 rounded-lg font-bold hover:opacity-80 border" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">&lt;</button>
+                        <h3 id="calendarMonthYear" class="text-xl font-bold" style="color: var(--color-text-base);"></h3>
+                        <button id="nextMonthBtn" class="px-4 py-2 rounded-lg font-bold hover:opacity-80 border" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">&gt;</button>
                     </div>
                     <div id="calendar-grid" class="grid grid-cols-7 gap-1"></div>
                 </div>
@@ -111,41 +116,41 @@ export async function render(params = {}) {
         </div>
         
         <div id="entryModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-start overflow-y-auto z-30 p-4">
-            <div class="p-6 rounded-lg shadow-xl w-full max-w-lg my-8" style="background-color: var(--color-surface);">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 id="modalTitle" class="text-xl font-bold"></h3>
-                    <p id="modalStepIndicator" class="text-sm font-semibold" style="color: var(--color-text-muted);"></p>
+            <div class="p-6 rounded-lg shadow-xl w-full max-w-lg my-8 border" style="background-color: var(--color-surface); border-color: var(--color-border);">
+                <div class="flex justify-between items-center mb-4 border-b pb-2" style="border-color: var(--color-border);">
+                    <h3 id="modalTitle" class="text-xl font-bold" style="color: var(--color-text-base);"></h3>
+                    <p id="modalStepIndicator" class="text-sm font-bold px-3 py-1 rounded" style="background-color: var(--color-background); color: var(--color-primary); border: 1px solid var(--color-border);"></p>
                 </div>
                 <form id="entryForm" class="space-y-4">
                     <input type="hidden" id="entryDate"><input type="hidden" id="entryId">
                     <input type="hidden" id="entryOwnerUid">
                     <input type="hidden" id="entryOwnerName">
+                    
                     <div data-step="1" class="wizard-step">
-                        <label for="entryChantier" class="text-lg font-medium">Quel chantier ?</label>
-                        <select id="entryChantier" class="w-full border p-2 rounded mt-2 text-lg" style="background-color: var(--color-background); border-color: var(--color-border);" required></select>
+                        <label for="entryChantier" class="text-lg font-medium" style="color: var(--color-text-base);">Quel chantier ?</label>
+                        <select id="entryChantier" class="w-full border p-3 rounded mt-2 text-lg focus:outline-none focus:ring-2" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);" required></select>
                     </div>
-                    <div data-step="2" class="wizard-step">
-                        <label class="text-lg font-medium">À quelles heures ?</label>
+                    
+                    <div data-step="2" class="wizard-step hidden">
+                        <label class="text-lg font-medium" style="color: var(--color-text-base);">À quelles heures ?</label>
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
-                            <div><label for="entryStartTime" class="text-sm">Début</label><input id="entryStartTime" type="time" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" required /></div>
-                            <div><label for="entryEndTime" class="text-sm">Fin</label><input id="entryEndTime" type="time" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" required /></div>
-                            <div><label for="entryPauseMinutes" class="text-sm">Pause (min)</label><input id="entryPauseMinutes" type="number" min="0" placeholder="ex: 30" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" /></div>
+                            <div><label for="entryStartTime" class="text-sm font-medium" style="color: var(--color-text-muted);">Début</label><input id="entryStartTime" type="time" class="w-full border p-2 rounded focus:outline-none focus:ring-2" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);" required /></div>
+                            <div><label for="entryEndTime" class="text-sm font-medium" style="color: var(--color-text-muted);">Fin</label><input id="entryEndTime" type="time" class="w-full border p-2 rounded focus:outline-none focus:ring-2" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);" required /></div>
+                            <div><label for="entryPauseMinutes" class="text-sm font-medium" style="color: var(--color-text-muted);">Pause (min)</label><input id="entryPauseMinutes" type="number" min="0" placeholder="ex: 30" class="w-full border p-2 rounded focus:outline-none focus:ring-2" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);" /></div>
                         </div>
                     </div>
-                    <div data-step="3" class="wizard-step">
-                        <label class="text-lg font-medium">Qui était présent ?</label>
-                        <div id="entryColleaguesContainer" class="mt-2 p-2 border rounded max-h-40 overflow-y-auto space-y-1" style="border-color: var(--color-border);"></div>
+                    
+                    <div data-step="3" class="wizard-step hidden">
+                        <label for="entryNotes" class="text-lg font-medium" style="color: var(--color-text-base);">Avez-vous des informations à préciser ?</label>
+                        <textarea id="entryNotes" placeholder="Note (Optionnel)" class="w-full border p-3 rounded mt-2 h-24 focus:outline-none focus:ring-2" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);"></textarea>
                     </div>
-                    <div data-step="4" class="wizard-step">
-                        <label for="entryNotes" class="text-lg font-medium">Avez-vous des informations à préciser ?</label>
-                        <textarea id="entryNotes" placeholder="(Optionnel)" class="w-full border p-2 rounded mt-2 h-24" style="background-color: var(--color-background); border-color: var(--color-border);"></textarea>
-                    </div>
-                    <div id="wizard-actions" class="flex justify-between items-center pt-4 border-t" style="border-color: var(--color-border);">
-                        <button type="button" id="wizardPrevBtn" class="px-6 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Précédent</button>
-                        <div>
-                            <button type="button" id="cancelEntryBtn" class="px-6 py-2 rounded mr-2" style="color: var(--color-text-muted);">Annuler</button>
-                            <button type="button" id="wizardNextBtn" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary);">Suivant</button>
-                            <button type="submit" id="wizardSaveBtn" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary);">Enregistrer</button>
+                    
+                    <div id="wizard-actions" class="flex justify-between items-center pt-4 border-t mt-6" style="border-color: var(--color-border);">
+                        <button type="button" id="wizardPrevBtn" class="px-6 py-2 rounded font-bold transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border); color: var(--color-text-base);">Précédent</button>
+                        <div class="flex gap-2">
+                            <button type="button" id="cancelEntryBtn" class="px-6 py-2 rounded font-bold border transition-colors hover:bg-opacity-80" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-muted);">Annuler</button>
+                            <button type="button" id="wizardNextBtn" class="text-white font-bold px-6 py-2 rounded transition-opacity hover:opacity-90" style="background-color: var(--color-primary);">Suivant</button>
+                            <button type="submit" id="wizardSaveBtn" class="text-white font-bold px-6 py-2 rounded transition-opacity hover:opacity-90 hidden" style="background-color: var(--color-primary);">Enregistrer</button>
                         </div>
                     </div>
                 </form>
@@ -168,7 +173,7 @@ function setupReassignModalListeners() {
     reassignConfirmBtn = document.getElementById('reassignConfirmBtn');
     reassignCancelBtn = document.getElementById('reassignCancelBtn');
 
-    if(!reassignConfirmBtn) return; // Sécurité si jamais l'élément manque
+    if(!reassignConfirmBtn) return; 
 
     reassignConfirmBtn.addEventListener('click', async () => {
         const pointageId = reassignModal.dataset.pointageId;
@@ -201,9 +206,7 @@ function setupReassignModalListeners() {
 
 async function cacheModalData() {
     const chantiersQuery = query(collection(db, "chantiers"), orderBy("name"));
-    const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
-    const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
-    const [chantiersSnapshot, colleaguesSnapshot, usersSnapshot] = await Promise.all([getDocs(chantiersQuery), getDocs(colleaguesQuery), getDocs(usersQuery)]);
+    const chantiersSnapshot = await getDocs(chantiersQuery);
     
     chantiersCache = chantiersSnapshot.docs.map(doc => ({ 
         name: doc.data().name, 
@@ -211,12 +214,10 @@ async function cacheModalData() {
         status: doc.data().status 
     }));
     
-    const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
-    const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
-    colleaguesCache = [...new Set([...colleagueNames, ...userNames])].sort((a, b) => a.localeCompare(b));
-
     const filterChantierSelect = document.getElementById('filterChantier');
-    filterChantierSelect.innerHTML = '<option value="">Tous les chantiers</option>' + [...new Set(chantiersCache.map(c => c.name))].map(name => `<option value="${name}">${name}</option>`).join('');
+    if (filterChantierSelect) {
+        filterChantierSelect.innerHTML = '<option value="">Tous les chantiers</option>' + [...new Set(chantiersCache.map(c => c.name))].map(name => `<option value="${name}">${name}</option>`).join('');
+    }
 }
 
 async function getPointages(startDate, endDate, chantierFilter = null) {
@@ -225,6 +226,7 @@ async function getPointages(startDate, endDate, chantierFilter = null) {
         where("timestamp", ">=", startDate.toISOString()),
         where("timestamp", "<", new Date(endDate.getTime() + 86400000).toISOString())
     ];
+    
     if (chantierFilter) {
         pointagesBaseQuery.push(where("chantier", "==", chantierFilter));
     }
@@ -237,18 +239,14 @@ async function getPointages(startDate, endDate, chantierFilter = null) {
         where("date_creation", ">=", trajetsStartDate),
         where("date_creation", "<=", trajetsEndDate)
     );
-    const [pointagesSnapshot, trajetsSnapshot] = await Promise.all([getDocs(pointagesQuery), getDocs(trajetsQuery)]);
     
+    const [pointagesSnapshot, trajetsSnapshot] = await Promise.all([getDocs(pointagesQuery), getDocs(trajetsQuery)]);
     let pointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // --- NOUVEAU : Filtrage local pour éviter le message d'erreur d'Index Firestore ---
-    // Si c'est un employé normal, on ne garde QUE les pointages de son profil.
-    // L'Admin verra tout.
-    if (currentUser.role !== 'admin') {
-        const activeProfileName = localStorage.getItem('currentProfileName') || currentUser.displayName;
-        pointages = pointages.filter(p => p.userName === activeProfileName);
+    // FILTRE INDIVIDUEL SEULEMENT SI LE FILTRE N'EST PAS NULL (Admin = null)
+    if (targetUserNameFilter) {
+        pointages = pointages.filter(p => p.userName === targetUserNameFilter);
     }
-    // ------------------------------------------------------------------------------------
 
     const trajetsMap = new Map();
     trajetsSnapshot.forEach(doc => trajetsMap.set(doc.data().id_pointage_arrivee, doc.data()));
@@ -301,19 +299,19 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
         if(chantierFilter && dayData.entries.length === 0) return;
 
         const dayWrapper = document.createElement('div');
-        dayWrapper.className = 'p-4 rounded-lg shadow-sm';
+        dayWrapper.className = 'p-4 rounded-lg shadow-sm border mb-3';
         dayWrapper.style.backgroundColor = 'var(--color-surface)';
+        dayWrapper.style.borderColor = 'var(--color-border)';
         
         const dayDate = new Date(dateString);
         const dayHeaderHTML = `
-            <div class="flex justify-between items-center border-b pb-2 mb-3" style="border-color: var(--color-border);">
+            <div class="flex justify-between items-center border-b pb-3 mb-3" style="border-color: var(--color-border);">
                 <div class="flex items-center gap-4">
-                    <h3 class="font-bold text-lg">${daysOfWeek[dayDate.getDay()]} ${dayDate.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</h3>
-                    ${currentUser.role === 'admin' ? `<button class="add-pointage-btn text-sm font-semibold" style="color: var(--color-primary);" data-date="${dateString}">+ Ajouter</button>` : ''}
+                    <h3 class="font-bold text-lg" style="color: var(--color-text-base);">${daysOfWeek[dayDate.getDay()]} ${dayDate.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</h3>
+                    ${currentUser.role === 'admin' ? `<button class="add-pointage-btn text-sm font-bold bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors" style="color: var(--color-primary);" data-date="${dateString}">+ Ajouter</button>` : ''}
                 </div>
                 <div class="text-right">
-                    <div class="font-bold" style="color: var(--color-primary);">${formatMilliseconds(dayData.dailyTotalMs)}</div>
-                    ${dayData.dailyTotalKm > 0 ? `<div class="text-xs" style="color: var(--color-text-muted);">${dayData.dailyTotalKm.toFixed(1)} km / ${formatMinutes(dayData.dailyTotalMin)}</div>` : ''}
+                    <div class="font-bold text-lg" style="color: var(--color-primary);">${formatMilliseconds(dayData.dailyTotalMs)}</div>
                 </div>
             </div>`;
         
@@ -322,7 +320,7 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
         if (dayData.entries.length > 0) {
             dayData.entries.forEach(d => entriesContainer.appendChild(createHistoryEntryElement(d, trajetsMap.get(d.id))));
         } else {
-            entriesContainer.innerHTML = `<p class="text-center py-4" style="color: var(--color-text-muted);">Aucun pointage pour ce jour.</p>`;
+            entriesContainer.innerHTML = `<p class="text-center py-4 italic" style="color: var(--color-text-muted);">Aucun pointage pour ce jour.</p>`;
         }
         dayWrapper.innerHTML = dayHeaderHTML;
         dayWrapper.appendChild(entriesContainer);
@@ -330,8 +328,8 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
     });
     
     document.getElementById("totalsDisplay").innerHTML = `
-        <div><p class="text-sm font-medium" style="color: var(--color-text-muted);">Total Heures Période</p><p>${formatMilliseconds(totalMs)}</p></div>
-        <div><p class="text-sm font-medium" style="color: var(--color-text-muted);">Total Trajets Période</p><p>${totalKm.toFixed(1)} km / ${formatMinutes(totalMin)}</p></div>`;
+        <div><p class="text-sm font-medium uppercase tracking-wide" style="color: var(--color-text-muted);">Total Heures Période</p><p style="color: var(--color-text-base);">${formatMilliseconds(totalMs)}</p></div>
+        <div><p class="text-sm font-medium uppercase tracking-wide" style="color: var(--color-text-muted);">Total Trajets Période</p><p style="color: var(--color-text-base);">${totalKm.toFixed(1)} km / ${formatMinutes(totalMin)}</p></div>`;
 
     updatePdfButtonState(pointagesPourPdf.length > 0);
     historyList.removeEventListener('click', handleHistoryClick);
@@ -358,7 +356,7 @@ async function renderCalendar() {
     const grid = document.getElementById("calendar-grid");
     grid.innerHTML = '';
     const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-    days.forEach(day => grid.innerHTML += `<div class="font-semibold text-center text-sm p-2" style="color: var(--color-text-muted);">${day}</div>`);
+    days.forEach(day => grid.innerHTML += `<div class="font-bold text-center text-sm p-2 uppercase" style="color: var(--color-text-muted);">${day}</div>`);
 
     const startOffset = (firstDayOfMonth.getDay() + 6) % 7;
     for (let i = 0; i < startOffset; i++) grid.innerHTML += '<div></div>';
@@ -376,9 +374,9 @@ async function renderCalendar() {
             else bgColor = 'rgba(250, 204, 21, 0.2)';
         }
         grid.innerHTML += `
-            <div class="p-2 h-24 rounded-md flex flex-col justify-between" style="background-color: ${bgColor}; border: 1px solid var(--color-border);">
-                <div class="font-bold text-sm">${i}</div>
-                ${totalMs > 0 ? `<div class="text-xs font-semibold text-right">${formatMilliseconds(totalMs)}</div>` : ''}
+            <div class="p-2 h-24 rounded-lg flex flex-col justify-between transition-transform hover:scale-105" style="background-color: ${bgColor}; border: 1px solid var(--color-border);">
+                <div class="font-bold text-sm" style="color: var(--color-text-base);">${i}</div>
+                ${totalMs > 0 ? `<div class="text-xs font-bold text-right" style="color: var(--color-primary);">${formatMilliseconds(totalMs)}</div>` : ''}
             </div>`;
     }
 }
@@ -515,13 +513,16 @@ function handleHistoryClick(e) {
 
 function createHistoryEntryElement(d, trajetData) {
     const wrapper = document.createElement("div");
-    wrapper.className = "p-3 border rounded-lg relative";
+    wrapper.className = "p-4 border rounded-lg relative hover:shadow-md transition-shadow";
     wrapper.style.backgroundColor = 'var(--color-background)';
     wrapper.style.borderColor = 'var(--color-border)';
 
+    // LE BADGE PRÉNOM 👤
+    const profileBadge = `<span class="inline-block px-2 py-0.5 text-xs font-bold rounded shadow-sm mb-2" style="background-color: var(--color-primary); color: white;">👤 ${d.userName || 'Profil Inconnu'}</span>`;
+
     let trajetDisplay = '';
     if (trajetData) {
-        trajetDisplay = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">🚗 ${trajetData.distance_km.toFixed(1)} km - ${formatMinutes(trajetData.duree_min)}</div>`;
+        trajetDisplay = `<div class="text-xs mt-1 font-semibold" style="color: var(--color-text-muted);">🚗 ${trajetData.distance_km.toFixed(1)} km - ${formatMinutes(trajetData.duree_min)}</div>`;
     }
     
     const startDate = new Date(d.timestamp);
@@ -532,27 +533,36 @@ function createHistoryEntryElement(d, trajetData) {
         timeDisplay = `De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
         durationDisplay = `<div class="text-sm font-bold mt-1" style="color: var(--color-primary);">${formatMilliseconds(effectiveWorkMs)}</div>`;
         if (d.pauseDurationMs && d.pauseDurationMs > 0) {
-            pauseDisplay = `<div class="text-xs text-yellow-600 mt-1">Pause : ${formatMilliseconds(d.pauseDurationMs)}</div>`;
+            pauseDisplay = `<div class="text-xs text-yellow-600 mt-1 font-bold">Pause : ${formatMilliseconds(d.pauseDurationMs)}</div>`;
         }
     }
-    wrapper.innerHTML = `<div class="pr-20"><div class="font-bold">${d.chantier}</div><div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}<div class="text-xs mt-1" style="color: var(--color-text-muted);">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div></div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
+    
+    wrapper.innerHTML = `
+        <div class="pr-20">
+            ${profileBadge}
+            <div class="font-bold text-lg" style="color: var(--color-text-base);">${d.chantier}</div>
+            <div class="text-sm font-medium" style="color: var(--color-text-muted);">${timeDisplay}</div>
+            ${trajetDisplay}
+        </div>
+        ${d.notes ? `<div class="mt-3 pt-3 border-t text-sm italic" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Note :</strong> ${d.notes}</div>` : ""}
+    `;
     
     if (currentUser.role === 'admin') {
         const controlsWrapper = document.createElement("div");
-        controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right"; 
+        controlsWrapper.className = "absolute top-4 right-4 flex flex-col items-end text-right"; 
         const buttonsDiv = document.createElement('div');
-        buttonsDiv.className = 'flex gap-2';
+        buttonsDiv.className = 'flex gap-3 mb-2';
         buttonsDiv.innerHTML = `
-            <button class="edit-btn font-bold" title="Modifier" data-id="${d.id}" style="color: var(--color-text-muted);">✏️</button>
-            <button class="delete-btn font-bold" title="Supprimer" data-id="${d.id}" style="color: var(--color-text-muted);">✖️</button>
-            <button class="reassign-btn font-bold" title="Réattribuer" data-id="${d.id}" style="color: var(--color-text-muted);">🔄</button>
+            <button class="edit-btn font-bold hover:scale-110 transition-transform" title="Modifier" data-id="${d.id}" style="color: var(--color-text-muted);">✏️</button>
+            <button class="delete-btn font-bold hover:scale-110 transition-transform" title="Supprimer" data-id="${d.id}" style="color: var(--color-text-muted);">✖️</button>
+            <button class="reassign-btn font-bold hover:scale-110 transition-transform" title="Réattribuer" data-id="${d.id}" style="color: var(--color-text-muted);">🔄</button>
         `;
         controlsWrapper.appendChild(buttonsDiv);
         controlsWrapper.innerHTML += pauseDisplay + durationDisplay;
         wrapper.appendChild(controlsWrapper);
     } else {
         const durationWrapper = document.createElement("div");
-        durationWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right";
+        durationWrapper.className = "absolute top-4 right-4 flex flex-col items-end text-right";
         durationWrapper.innerHTML = pauseDisplay + durationDisplay;
         wrapper.appendChild(durationWrapper);
     }
@@ -584,16 +594,12 @@ async function openReassignModal(pointageId) {
     reassignConfirmBtn.disabled = true;
 
     try {
-        // On récupère tous les utilisateurs approuvés
         const users = await getUsers(true);
         let optionsHTML = '';
 
         users.forEach(user => {
-            // On récupère les profils du compte (ou son displayName par défaut)
             const profiles = user.profiles || [user.displayName];
-            
             profiles.forEach(profileName => {
-                // Optionnel : On évite de reproposer exactement le profil qui possède déjà le pointage actuel
                 if (!(user.uid === pointageToReassign.uid && profileName === pointageToReassign.userName)) {
                     optionsHTML += `
                         <option value="${user.uid}" data-name="${profileName}">
@@ -653,10 +659,11 @@ function showWizardStep(step) {
     const prevBtn = document.getElementById('wizardPrevBtn');
     const nextBtn = document.getElementById('wizardNextBtn');
     const saveBtn = document.getElementById('wizardSaveBtn');
-    stepIndicator.textContent = `Étape ${step} sur 4`;
+    
+    stepIndicator.textContent = `Étape ${step} sur 3`;
     prevBtn.classList.toggle('hidden', step === 1);
-    nextBtn.classList.toggle('hidden', step === 4);
-    saveBtn.classList.toggle('hidden', step !== 4);
+    nextBtn.classList.toggle('hidden', step === 3);
+    saveBtn.classList.toggle('hidden', step !== 3);
 }
 
 function openEntryModal(data = {}) {
@@ -673,9 +680,6 @@ function openEntryModal(data = {}) {
     
     const activeChantiers = chantiersCache.filter(c => c.status === 'active');
     chantierSelect.innerHTML = '<option value="">-- Choisissez --</option>' + [...new Set(activeChantiers.map(c => c.name))].map(name => `<option value="${name}">${name}</option>`).join('');
-    
-    const colleaguesContainer = document.getElementById('entryColleaguesContainer');
-    colleaguesContainer.innerHTML = colleaguesCache.map(name => `<label class="flex items-center gap-2"><input type="checkbox" value="${name}" name="entryColleagues" /><span>${name}</span></label>`).join('');
     
     if (isEditing) {
         title.textContent = "Modifier le pointage";
@@ -698,10 +702,6 @@ function openEntryModal(data = {}) {
         const pauseMinutes = data.pauseDurationMs ? Math.round(data.pauseDurationMs / 60000) : '';
         document.getElementById('entryPauseMinutes').value = pauseMinutes;
         document.getElementById('entryNotes').value = data.notes || '';
-        (data.colleagues || []).forEach(colleagueName => {
-            const checkbox = colleaguesContainer.querySelector(`input[value="${colleagueName}"]`);
-            if (checkbox) checkbox.checked = true;
-        });
 
     } else {
         title.textContent = "Ajouter un pointage";
@@ -711,7 +711,7 @@ function openEntryModal(data = {}) {
         wizardActions.querySelector('#wizardNextBtn').classList.remove('hidden');
         
         document.getElementById('entryOwnerUid').value = targetUser.uid;
-        document.getElementById('entryOwnerName').value = targetUser.name;
+        document.getElementById('entryOwnerName').value = targetUserNameFilter || currentUser.displayName;
         
         entryWizardData = { date: data.date };
         document.getElementById('entryId').value = '';
@@ -779,13 +779,12 @@ async function saveEntry(e) {
             timestamp: new Date(`${date}T${startTime}`).toISOString(),
             endTime: new Date(`${date}T${endTime}`).toISOString(),
             pauseDurationMs: pauseMinutes * 60000,
-            colleagues: Array.from(document.querySelectorAll('input[name="entryColleagues"]:checked')).map(el => el.value),
+            colleagues: [], 
             notes: document.getElementById('entryNotes').value.trim()
         };
     } else {
-        entryWizardData.colleagues = Array.from(document.querySelectorAll('input[name="entryColleagues"]:checked')).map(el => el.value);
         entryWizardData.notes = document.getElementById('entryNotes').value.trim();
-        const { date, chantier, startTime, endTime, colleagues, notes, pauseDurationMs } = entryWizardData;
+        const { date, chantier, startTime, endTime, notes, pauseDurationMs } = entryWizardData;
         
         if (!startTime || !endTime) {
             showInfoModal("Attention", "Veuillez renseigner une heure de début et de fin.");
@@ -797,7 +796,7 @@ async function saveEntry(e) {
             timestamp: new Date(`${date}T${startTime}`).toISOString(), 
             endTime: new Date(`${date}T${endTime}`).toISOString(), 
             pauseDurationMs: pauseDurationMs || 0,
-            colleagues, 
+            colleagues: [], 
             notes: `(Saisie manuelle) ${notes}`
         };
     }
@@ -814,7 +813,7 @@ async function saveEntry(e) {
             const fullData = { 
                 ...dataToSave, 
                 uid: ownerUid,
-                userName: ownerName === "Mon" ? currentUser.displayName : ownerName,
+                userName: ownerName,
                 createdAt: serverTimestamp(), 
                 status: 'completed' 
             };
@@ -852,7 +851,6 @@ function generateHistoryPDF() {
     dataForPdf.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
     
-    // NOUVEAU : On utilise le nom du profil
     const userName = targetUser.name; 
     
     const firstDate = new Date(dataForPdf[0].timestamp);
@@ -881,7 +879,7 @@ function generateHistoryPDF() {
     
     const sortedDays = Object.keys(pointagesByDay).sort((a,b) => pointagesByDay[a].dateObj - pointagesByDay[b].dateObj);
 
-    const tableHead = [['Date', 'Heures', 'Chantier', 'Pause', 'Travail Effectif', 'Collègues']];
+    const tableHead = [['Date', 'Profil', 'Heures', 'Chantier', 'Pause', 'Travail Effectif']];
     const tableBody = [];
     let totalEffectiveMs = 0;
 
@@ -901,8 +899,9 @@ function generateHistoryPDF() {
             const timeStr = `${startDate.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})} - ${endDate.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}`;
             const pauseStr = formatMilliseconds(d.pauseDurationMs || 0);
             const durationStr = formatMilliseconds(effectiveWorkMs);
-            const colleaguesStr = Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun';
-            tableBody.push([dateStr, timeStr, d.chantier, pauseStr, durationStr, colleaguesStr]);
+            const profileStr = d.userName || 'Inconnu';
+            
+            tableBody.push([dateStr, profileStr, timeStr, d.chantier, pauseStr, durationStr]);
         });
     });
 
@@ -914,8 +913,8 @@ function generateHistoryPDF() {
         headStyles: { fillColor: [41, 51, 92], textColor: 255, fontStyle: 'bold' },
         styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
         columnStyles: {
-            0: { cellWidth: 40 }, 1: { cellWidth: 60 }, 2: { cellWidth: 'auto' }, 
-            3: { cellWidth: 40 }, 4: { cellWidth: 50 }, 5: { cellWidth: 'auto' }
+            0: { cellWidth: 40 }, 1: { cellWidth: 60 }, 2: { cellWidth: 60 }, 
+            3: { cellWidth: 'auto' }, 4: { cellWidth: 40 }, 5: { cellWidth: 60 }
         }
     });
     const finalY = doc.lastAutoTable.finalY;
