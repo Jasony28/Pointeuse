@@ -98,8 +98,16 @@ async function loadReport() {
     try {
         const allUsers = await getUsers();
         const approvedUsers = allUsers.filter(user => user.status === "approved");
-        const hoursByUid = new Map();
-        approvedUsers.forEach(user => hoursByUid.set(user.uid, 0));
+        
+        // NOUVEAU : On stocke les heures par UID ET par Profil
+        const dataByUid = {};
+        approvedUsers.forEach(user => {
+            dataByUid[user.uid] = { 
+                userDoc: user, 
+                totalMs: 0, 
+                profiles: {} 
+            };
+        });
 
         const pointagesQuery = query(collection(db, "pointages"),
             where("timestamp", ">=", periodInfo.startDate.toISOString()),
@@ -109,9 +117,16 @@ async function loadReport() {
 
         pointagesSnapshot.forEach(doc => {
             const pointage = doc.data();
-            if (pointage.endTime && hoursByUid.has(pointage.uid)) {
+            if (pointage.endTime && dataByUid[pointage.uid]) {
                 const durationMs = (new Date(pointage.endTime) - new Date(pointage.timestamp)) - (pointage.pauseDurationMs || 0);
-                hoursByUid.set(pointage.uid, hoursByUid.get(pointage.uid) + durationMs);
+                const profileName = pointage.userName || 'Inconnu';
+                
+                dataByUid[pointage.uid].totalMs += durationMs;
+                
+                if (!dataByUid[pointage.uid].profiles[profileName]) {
+                    dataByUid[pointage.uid].profiles[profileName] = 0;
+                }
+                dataByUid[pointage.uid].profiles[profileName] += durationMs;
             }
         });
 
@@ -124,31 +139,44 @@ async function loadReport() {
         if (isStealthMode()) {
             reportHeader.innerHTML = `
                 <tr class="border-b">
-                    <th class="p-2">Employé</th>
-                    <th class="p-2">Heures Prestées (Réel)</th>
+                    <th class="p-2">Employé / Profils</th>
+                    <th class="p-2 text-right">Heures Prestées (Réel)</th>
                 </tr>
             `;
             approvedUsers.forEach(user => {
-                const totalMs = hoursByUid.get(user.uid) || 0;
+                const data = dataByUid[user.uid];
+                
+                // LIGNE PRINCIPALE (TOTAL DU COMPTE)
                 const row = document.createElement('tr');
-                row.className = 'border-b';
+                row.className = 'border-b bg-gray-50 dark:bg-gray-800/50';
                 row.innerHTML = `
-                    <td class="p-2">${user.displayName}</td>
-                    <td class="p-2 font-semibold text-purple-700">${formatMilliseconds(totalMs)}</td>
+                    <td class="p-3 font-bold">${user.displayName}</td>
+                    <td class="p-3 text-right font-bold text-purple-700">${formatMilliseconds(data.totalMs)}</td>
                 `;
                 reportBody.appendChild(row);
+
+                // SOUS-LIGNES (PROFILS)
+                Object.entries(data.profiles).forEach(([pName, pMs]) => {
+                    const subRow = document.createElement('tr');
+                    subRow.className = 'border-b text-sm text-gray-600 dark:text-gray-400';
+                    subRow.innerHTML = `
+                        <td class="p-2 pl-8 flex items-center gap-2">↳ 👤 ${pName}</td>
+                        <td class="p-2 text-right font-medium">${formatMilliseconds(pMs)}</td>
+                    `;
+                    reportBody.appendChild(subRow);
+                });
             });
         } else {
             reportHeader.innerHTML = `
                 <tr class="border-b">
-                    <th class="p-2">Employé</th>
+                    <th class="p-2">Employé / Profils</th>
                     <th class="p-2 text-center">Heures Contrat</th>
                     <th class="p-2 text-center">Heures Prestées</th>
                     <th class="p-2 text-center">Solde (+/-)</th>
                 </tr>
             `;
             approvedUsers.forEach(user => {
-                const totalMs = hoursByUid.get(user.uid) || 0;
+                const data = dataByUid[user.uid];
                 const weeklyContractHours = user.contractHours || 0;
                 
                 let periodContractMs = 0;
@@ -160,11 +188,11 @@ async function loadReport() {
                     }
                 }
 
-                let balanceMs = totalMs - periodContractMs;
-                let displayedTotalMs = totalMs;
+                let balanceMs = data.totalMs - periodContractMs;
+                let displayedTotalMs = data.totalMs;
 
                 if (weeklyContractHours === 12) {
-                    displayedTotalMs = Math.min(totalMs, periodContractMs);
+                    displayedTotalMs = Math.min(data.totalMs, periodContractMs);
                     balanceMs = Math.min(0, balanceMs);
                 }
 
@@ -175,19 +203,33 @@ async function loadReport() {
                     balanceClass = 'text-green-600 font-bold';
                     balanceText = `+${formatMilliseconds(balanceMs)}`;
                 } else if (balanceMs < 0) {
-                    balanceClass = 'text-red-600';
+                    balanceClass = 'text-red-600 font-bold';
                     balanceText = `-${formatMilliseconds(Math.abs(balanceMs))}`;
                 }
 
+                // LIGNE PRINCIPALE (TOTAL DU COMPTE)
                 const row = document.createElement('tr');
-                row.className = 'border-b';
+                row.className = 'border-b bg-gray-50 dark:bg-gray-800/50';
                 row.innerHTML = `
-                    <td class="p-2 font-medium">${user.displayName}</td>
-                    <td class="p-2 text-center">${formatMilliseconds(periodContractMs)}</td>
-                    <td class="p-2 text-center font-semibold">${formatMilliseconds(displayedTotalMs)}</td>
-                    <td class="p-2 text-center ${balanceClass}">${balanceText}</td>
+                    <td class="p-3 font-bold">${user.displayName}</td>
+                    <td class="p-3 text-center text-gray-500">${formatMilliseconds(periodContractMs)}</td>
+                    <td class="p-3 text-center font-bold" style="color: var(--color-primary);">${formatMilliseconds(displayedTotalMs)}</td>
+                    <td class="p-3 text-center ${balanceClass}">${balanceText}</td>
                 `;
                 reportBody.appendChild(row);
+
+                // SOUS-LIGNES (PROFILS)
+                Object.entries(data.profiles).forEach(([pName, pMs]) => {
+                    const subRow = document.createElement('tr');
+                    subRow.className = 'border-b text-sm text-gray-600 dark:text-gray-400';
+                    subRow.innerHTML = `
+                        <td class="p-2 pl-8 flex items-center gap-2">↳ 👤 ${pName}</td>
+                        <td class="p-2 text-center text-gray-400">-</td>
+                        <td class="p-2 text-center font-medium">${formatMilliseconds(pMs)}</td>
+                        <td class="p-2 text-center text-gray-400">-</td>
+                    `;
+                    reportBody.appendChild(subRow);
+                });
             });
         }
     } catch (error) {
@@ -195,4 +237,3 @@ async function loadReport() {
         reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Erreur de chargement du rapport.</td></tr>`;
     }
 }
-
