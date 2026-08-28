@@ -79,19 +79,22 @@ async function logAction(pointageId, action, details = {}) {
 }
 
 export async function render(params = {}) {
-    // --- 1. CORRECTION DU BUG "FALSE" EN TEXTE ---
+    // 1. Correction du paramètre viewAll
     let isViewAll = true;
     if (params.viewAll === false || String(params.viewAll) === "false") {
         isViewAll = false;
     }
 
-    // --- 2. SÉCURITÉ POUR LES OUVRIERS NORMAUX ---
+    const isNormalUser = currentUser.role !== 'admin';
+    let displayUI = "Moi";
+    let internalName = currentUser.displayName;
+
+    // 2. Attribution sécurisée de l'utilisateur ciblé
     if (params.userId && currentUser.role === 'admin') {
-        // Un admin regarde un utilisateur cible
-        targetUser = { uid: params.userId, name: params.userName, viewAll: isViewAll };
+        internalName = params.userName.replace(" (Tous les profils)", "");
+        displayUI = params.userName;
+        targetUser = { uid: params.userId, name: internalName, viewAll: isViewAll };
     } else {
-        // L'utilisateur regarde sa propre page (S'il n'est pas admin, on force viewAll à false pour isoler son profil)
-        const isNormalUser = currentUser.role !== 'admin';
         targetUser = { 
             uid: currentUser.uid, 
             name: currentUser.displayName, 
@@ -117,10 +120,10 @@ export async function render(params = {}) {
                     <h2 class="text-2xl font-bold">Historique de</h2>
                     ${currentUser.role === 'admin' ? `
                         <select id="userSwitchDropdown" class="text-2xl font-bold p-1 rounded cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-800" style="color: var(--color-primary); background-color: transparent; border: 2px solid var(--color-primary); outline: none;">
-                            <option value="${targetUser.uid}">${targetUser.name}</option>
+                            <option value="${targetUser.uid}">${displayUI}</option>
                         </select>
                     ` : `
-                        <h2 class="text-2xl font-bold" style="color: var(--color-primary);">${targetUser.name}</h2>
+                        <h2 class="text-2xl font-bold" style="color: var(--color-primary);">${displayUI}</h2>
                     `}
                 </div>
 
@@ -339,21 +342,13 @@ async function cacheModalData() {
 }
 
 async function getPointages(startDate, endDate, chantierFilter = null) {
+    // Requête pure sans "userName" ni "chantier" pour empêcher Firebase de planter (Missing Index)
     let pointagesBaseQuery = [
         where("uid", "==", targetUser.uid),
         where("timestamp", ">=", startDate.toISOString()),
         where("timestamp", "<", new Date(endDate.getTime() + 86400000).toISOString())
     ];
 
-    // --- LE FILTRE MAGIQUE MARCHE ENFIN GRÂCE À LA CORRECTION EN HAUT ---
-    if (targetUser.viewAll === false) {
-        pointagesBaseQuery.push(where("userName", "==", targetUser.name));
-    }
-
-    if (chantierFilter) {
-        pointagesBaseQuery.push(where("chantier", "==", chantierFilter));
-    }
-    
     const pointagesQuery = query(collection(db, "pointages"), ...pointagesBaseQuery, orderBy("timestamp", "asc"));
     
     const trajetsStartDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
@@ -365,7 +360,19 @@ async function getPointages(startDate, endDate, chantierFilter = null) {
     );
     const [pointagesSnapshot, trajetsSnapshot] = await Promise.all([getDocs(pointagesQuery), getDocs(trajetsQuery)]);
     
-    const pointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    let pointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // --- LE FILTRE JAVASCRIPT INVINCIBLE ---
+    // 1. Filtrer par profil si l'admin n'a pas cliqué sur le compte global
+    if (targetUser.viewAll === false) {
+        pointages = pointages.filter(p => p.userName === targetUser.name);
+    }
+    // 2. Filtrer par chantier si on a utilisé le menu déroulant
+    if (chantierFilter) {
+        pointages = pointages.filter(p => p.chantier === chantierFilter);
+    }
+    // ---------------------------------------
+
     const trajetsMap = new Map();
     trajetsSnapshot.forEach(doc => trajetsMap.set(doc.data().id_pointage_arrivee, doc.data()));
 
