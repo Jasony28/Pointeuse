@@ -132,8 +132,23 @@ export async function render() {
     `;
 
     pageContent.onclick = (e) => {
-        if (e.target.id === 'startBtn') openStartModal();
-        if (e.target.id === 'openManualPointageBtn') openManualModal();
+        // --- SÉCURITÉ POUR BLOQUER LES PROFILS "EXTRA" OU "NE PAS UTILISER" ---
+        const activeProfile = getActiveProfileName().toLowerCase();
+        const isForbidden = activeProfile.includes('extra') || activeProfile.includes('ne pas utiliser');
+
+        if (e.target.id === 'startBtn') {
+            if (isForbidden) return; // Ne fait rien, le bouton est déjà désactivé visuellement
+            openStartModal();
+        }
+        if (e.target.id === 'openManualPointageBtn') {
+            if (isForbidden) {
+                showInfoModal("Action impossible", "Ce profil n'est pas autorisé à encoder des heures.");
+                return;
+            }
+            openManualModal();
+        }
+        // ----------------------------------------------------------------------
+
         if (e.target.id === 'prevWeekBtn') { currentWeekOffset--; displayWeekView(); }
         if (e.target.id === 'nextWeekBtn') { currentWeekOffset++; displayWeekView(); }
         if (e.target.id === 'cancelStartPointage') document.getElementById('startPointageModal').classList.add('hidden');
@@ -212,6 +227,9 @@ function initLiveTracker() {
     const storageKey = `activePointage_${activeProfileName}`;
     const activePointage = JSON.parse(localStorage.getItem(storageKey));
 
+    // Vérification de sécurité visuelle pour les profils interdits
+    const isForbidden = activeProfileName.toLowerCase().includes('extra') || activeProfileName.toLowerCase().includes('ne pas utiliser');
+
     if (activePointage && activePointage.userName === activeProfileName) {
         const isPaused = activePointage.status === 'paused';
         let chantierHTML = `<p class="text-3xl font-extrabold my-2 tracking-wide" style="color: var(--color-primary);">${activePointage.chantier}</p>`;
@@ -233,14 +251,26 @@ function initLiveTracker() {
         document.getElementById('pauseResumeBtn').onclick = isPaused ? resumePointage : pausePointage;
         document.getElementById('stopBtn').onclick = openStopModal;
     } else {
-        container.innerHTML = `
-            <div class="text-center py-6">
-                <h3 class="text-3xl font-extrabold mb-3" style="color: var(--color-text-base);">Prêt à démarrer ?</h3>
-                <p class="mb-8 text-lg" style="color: var(--color-text-muted);">Profil actif : <strong style="color: var(--color-primary);">${activeProfileName}</strong></p>
-                <button id="startBtn" class="w-full md:w-auto text-white font-bold px-10 py-5 rounded-xl text-xl shadow-xl transition-transform hover:scale-105" style="background-color: var(--color-primary);">
-                    ▶️ Démarrer le Chrono
-                </button>
-            </div>`;
+        // --- BLOCAGE VISUEL DU BOUTON DÉMARRER ---
+        if (isForbidden) {
+            container.innerHTML = `
+                <div class="text-center py-6">
+                    <h3 class="text-3xl font-extrabold mb-3" style="color: var(--color-text-base);">Profil non autorisé</h3>
+                    <p class="mb-8 text-lg" style="color: var(--color-text-muted);">Vous êtes sur le profil : <strong class="text-red-500">${activeProfileName}</strong></p>
+                    <button disabled class="w-full md:w-auto text-white font-bold px-10 py-5 rounded-xl text-xl shadow-xl bg-gray-400 cursor-not-allowed opacity-70">
+                        ⛔ Pointage désactivé
+                    </button>
+                </div>`;
+        } else {
+            container.innerHTML = `
+                <div class="text-center py-6">
+                    <h3 class="text-3xl font-extrabold mb-3" style="color: var(--color-text-base);">Prêt à démarrer ?</h3>
+                    <p class="mb-8 text-lg" style="color: var(--color-text-muted);">Profil actif : <strong style="color: var(--color-primary);">${activeProfileName}</strong></p>
+                    <button id="startBtn" class="w-full md:w-auto text-white font-bold px-10 py-5 rounded-xl text-xl shadow-xl transition-transform hover:scale-105" style="background-color: var(--color-primary);">
+                        ▶️ Démarrer le Chrono
+                    </button>
+                </div>`;
+        }
     }
 }
 

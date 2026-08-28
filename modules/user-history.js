@@ -18,6 +18,11 @@ let localStealthMode = false;
 
 let reassignModal, userSelect, reassignConfirmBtn, reassignCancelBtn;
 
+// --- RECUPERATION DU PROFIL ACTIF (comme sur la pointeuse) ---
+function getActiveProfileName() {
+    return localStorage.getItem('currentProfileName') || currentUser.displayName;
+}
+
 // --- CALCULATEUR DE JOURS FÉRIÉS BELGES ---
 function isBelgianHoliday(dateObj) {
     const year = dateObj.getFullYear();
@@ -85,18 +90,19 @@ export async function render(params = {}) {
     }
 
     const isNormalUser = currentUser.role !== 'admin';
-    let displayUI = "Moi";
-    let internalName = currentUser.displayName;
+    const activeProfileName = getActiveProfileName();
+    let displayUI = activeProfileName;
 
+    // DEFINITION CIBLE (Si Admin regarde quelqu'un VS l'utilisateur regarde sa page)
     if (params.userId && currentUser.role === 'admin') {
-        internalName = params.userName.replace(" (Tous les profils)", "");
+        const internalName = params.userName.replace(" (Tous les profils)", "");
         displayUI = params.userName;
         targetUser = { uid: params.userId, name: internalName, viewAll: isViewAll };
     } else {
         targetUser = { 
             uid: currentUser.uid, 
-            name: currentUser.displayName, 
-            viewAll: isNormalUser ? false : true 
+            name: activeProfileName, 
+            viewAll: isNormalUser ? false : true // FALSE OBLIGATOIRE POUR LES OUVRIERS
         };
     }
 
@@ -359,15 +365,16 @@ async function getPointages(startDate, endDate, chantierFilter = null) {
     
     let pointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // --- LE FILTRE A ÉTÉ DÉSACTIVÉ LE TEMPS DE CONNAÎTRE LE NOM DU CHAMP ---
-    // if (targetUser.viewAll === false) {
-    //     pointages = pointages.filter(p => p.???? === targetUser.name);
-    // }
-    // ------------------------------------------------------------------------
-
+    // --- LE FILTRE JAVASCRIPT BLINDÉ POUR LA CASSE ---
+    if (targetUser.viewAll === false) {
+        const searchName = (targetUser.name || "").trim().toLowerCase();
+        pointages = pointages.filter(p => (p.userName || "").trim().toLowerCase() === searchName);
+    }
+    
     if (chantierFilter) {
         pointages = pointages.filter(p => p.chantier === chantierFilter);
     }
+    // ------------------------------------------------
 
     const trajetsMap = new Map();
     trajetsSnapshot.forEach(doc => trajetsMap.set(doc.data().id_pointage_arrivee, doc.data()));
@@ -382,7 +389,6 @@ function applyStealthSmoothing(rawPointages) {
     let validPointages = JSON.parse(JSON.stringify(rawPointages));
     validPointages = validPointages.filter(p => !hiddenChantiers.includes(p.chantier));
 
-    // --- FILTRE ANTI-DOUBLON INTELLIGENT (Tolérance 5 minutes) ---
     validPointages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     let uniquePointages = [];
     
@@ -421,7 +427,6 @@ function applyStealthSmoothing(rawPointages) {
         }
     }
     validPointages = uniquePointages;
-    // -----------------------------------------------------------
 
     const byWeek = {};
     validPointages.forEach(p => {
@@ -881,7 +886,7 @@ function handleHistoryClick(e) {
 
 function createHistoryEntryElement(d, trajetData) {
     const wrapper = document.createElement("div");
-    wrapper.className = "p-3 border rounded-lg relative";
+    wrapper.className = "p-3 border rounded-lg relative hover:shadow-md transition-shadow";
     wrapper.style.backgroundColor = 'var(--color-background)';
     wrapper.style.borderColor = 'var(--color-border)';
 
@@ -901,17 +906,29 @@ function createHistoryEntryElement(d, trajetData) {
             pauseDisplay = `<div class="text-xs text-yellow-600 mt-1">Pause : ${formatMilliseconds(d.pauseDurationMs)}</div>`;
         }
     }
-    wrapper.innerHTML = `<div class="pr-20"><div class="font-bold">${d.chantier}</div><div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}<div class="text-xs mt-1" style="color: var(--color-text-muted);">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div></div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
+
+    const profilNameHTML = `<div class="text-xs font-bold uppercase tracking-wider mb-1" style="color: var(--color-primary);">👤 ${d.userName || 'Inconnu'}</div>`;
+
+    wrapper.innerHTML = `
+        <div class="pr-24">
+            ${profilNameHTML}
+            <div class="font-bold text-base" style="color: var(--color-text-base);">${d.chantier}</div>
+            <div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>
+            ${trajetDisplay}
+            <div class="text-xs mt-1" style="color: var(--color-text-muted);">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div>
+        </div>
+        ${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}
+    `;
     
     if (currentUser.role === 'admin' && !localStealthMode) {
         const controlsWrapper = document.createElement("div");
         controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right"; 
         const buttonsDiv = document.createElement('div');
-        buttonsDiv.className = 'flex gap-2';
+        buttonsDiv.className = 'flex gap-2 mb-1';
         buttonsDiv.innerHTML = `
-            <button class="edit-btn font-bold" title="Modifier" data-id="${d.id}" style="color: var(--color-text-muted);">✏️</button>
-            <button class="delete-btn font-bold" title="Supprimer" data-id="${d.id}" style="color: var(--color-text-muted);">✖️</button>
-            <button class="reassign-btn font-bold" title="Réattribuer" data-id="${d.id}" style="color: var(--color-text-muted);">🔄</button>
+            <button class="edit-btn font-bold hover:scale-110 transition-transform" title="Modifier" data-id="${d.id}" style="color: var(--color-text-muted);">✏️</button>
+            <button class="delete-btn font-bold hover:scale-110 transition-transform" title="Supprimer" data-id="${d.id}" style="color: var(--color-text-muted);">✖️</button>
+            <button class="reassign-btn font-bold hover:scale-110 transition-transform" title="Réattribuer" data-id="${d.id}" style="color: var(--color-text-muted);">🔄</button>
         `;
         controlsWrapper.appendChild(buttonsDiv);
         controlsWrapper.innerHTML += pauseDisplay + durationDisplay;
@@ -1271,4 +1288,3 @@ function generateHistoryPDF() {
     const fileName = `Historique_${userName.replace(/ /g, '_')}_${firstDate.toISOString().split('T')[0]}_${timestamp}.pdf`;
     doc.save(fileName);
 }
-
