@@ -79,15 +79,25 @@ async function logAction(pointageId, action, details = {}) {
 }
 
 export async function render(params = {}) {
-    // --- CORRECTION : Sécurisation du paramètre viewAll (pour contrer les requêtes URL) ---
+    // --- 1. CORRECTION DU BUG "FALSE" EN TEXTE ---
     let isViewAll = true;
     if (params.viewAll === false || String(params.viewAll) === "false") {
         isViewAll = false;
     }
 
-    targetUser = (params.userId && currentUser.role === 'admin') 
-        ? { uid: params.userId, name: params.userName, viewAll: isViewAll } 
-        : { uid: currentUser.uid, name: "Mon", viewAll: true };
+    // --- 2. SÉCURITÉ POUR LES OUVRIERS NORMAUX ---
+    if (params.userId && currentUser.role === 'admin') {
+        // Un admin regarde un utilisateur cible
+        targetUser = { uid: params.userId, name: params.userName, viewAll: isViewAll };
+    } else {
+        // L'utilisateur regarde sa propre page (S'il n'est pas admin, on force viewAll à false pour isoler son profil)
+        const isNormalUser = currentUser.role !== 'admin';
+        targetUser = { 
+            uid: currentUser.uid, 
+            name: currentUser.displayName, 
+            viewAll: isNormalUser ? false : true 
+        };
+    }
 
     try {
         const userDoc = await getDoc(doc(db, "users", targetUser.uid));
@@ -335,7 +345,15 @@ async function getPointages(startDate, endDate, chantierFilter = null) {
         where("timestamp", "<", new Date(endDate.getTime() + 86400000).toISOString())
     ];
 
-    // On évite de rajouter where("userName") ou where("chantier") ici pour éviter le crash Firebase "Missing Index"
+    // --- LE FILTRE MAGIQUE MARCHE ENFIN GRÂCE À LA CORRECTION EN HAUT ---
+    if (targetUser.viewAll === false) {
+        pointagesBaseQuery.push(where("userName", "==", targetUser.name));
+    }
+
+    if (chantierFilter) {
+        pointagesBaseQuery.push(where("chantier", "==", chantierFilter));
+    }
+    
     const pointagesQuery = query(collection(db, "pointages"), ...pointagesBaseQuery, orderBy("timestamp", "asc"));
     
     const trajetsStartDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
@@ -347,19 +365,7 @@ async function getPointages(startDate, endDate, chantierFilter = null) {
     );
     const [pointagesSnapshot, trajetsSnapshot] = await Promise.all([getDocs(pointagesQuery), getDocs(trajetsQuery)]);
     
-    let pointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    // --- FILTRE JAVASCRIPT BULLETPROOF ---
-    // 1. Filtrer par profil si l'admin n'a pas cliqué sur le compte global
-    if (targetUser.viewAll === false) {
-        pointages = pointages.filter(p => p.userName === targetUser.name);
-    }
-    // 2. Filtrer par chantier si on a utilisé le menu déroulant
-    if (chantierFilter) {
-        pointages = pointages.filter(p => p.chantier === chantierFilter);
-    }
-    // ---------------------------------------
-
+    const pointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     const trajetsMap = new Map();
     trajetsSnapshot.forEach(doc => trajetsMap.set(doc.data().id_pointage_arrivee, doc.data()));
 
@@ -1156,7 +1162,7 @@ async function saveEntry(e) {
             const fullData = { 
                 ...dataToSave, 
                 uid: ownerUid,
-                userName: ownerName === "Mon" ? currentUser.displayName : ownerName,
+                userName: ownerName,
                 createdAt: serverTimestamp(), 
                 status: 'completed' 
             };
