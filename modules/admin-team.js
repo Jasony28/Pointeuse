@@ -187,7 +187,14 @@ async function loadUsers() {
                 const nameSpan = document.createElement('span');
                 nameSpan.className = 'font-bold cursor-pointer hover:underline flex items-center gap-2';
                 nameSpan.style.color = 'var(--color-primary)';
-                nameSpan.innerHTML = `👤 ${profileName}`;
+                nameSpan.textContent = profileName;
+                if ((user.profilePins || {})[profileName]) {
+                    const lock = document.createElement('span');
+                    lock.className = 'profile-lock-badge';
+                    lock.textContent = 'Code';
+                    lock.title = 'Ce profil est protégé par un code à 4 chiffres';
+                    nameSpan.appendChild(lock);
+                }
                 nameSpan.title = "Voir l'historique unique de ce profil";
                 
                 // Clic sur un profil spécifique : viewAll = false
@@ -204,7 +211,19 @@ async function loadUsers() {
                 deleteProfBtn.textContent = 'Supprimer';
                 deleteProfBtn.onclick = () => deleteProfile(user.id, profileName, profiles);
 
-                profileRow.appendChild(deleteProfBtn);
+                // Code oublié : l'admin peut retirer le code du profil
+                const rowActions = document.createElement('div');
+                rowActions.className = 'flex items-center gap-2';
+                if ((user.profilePins || {})[profileName]) {
+                    const resetPinBtn = document.createElement('button');
+                    resetPinBtn.className = 'text-xs font-bold px-3 py-1.5 rounded transition-colors';
+                    resetPinBtn.style.cssText = 'background-color: var(--color-primary-soft); color: var(--color-primary);';
+                    resetPinBtn.textContent = 'Retirer le code';
+                    resetPinBtn.onclick = () => removeProfilePin(user.id, profileName, user.profilePins);
+                    rowActions.appendChild(resetPinBtn);
+                }
+                rowActions.appendChild(deleteProfBtn);
+                profileRow.appendChild(rowActions);
                 profilesGrid.appendChild(profileRow);
             });
 
@@ -214,6 +233,25 @@ async function loadUsers() {
     } catch (error) {
         console.error("Erreur de chargement des utilisateurs:", error);
         listContainer.innerHTML = '<p class="text-center text-red-500 text-sm">Erreur lors du chargement des profils.</p>';
+    }
+}
+
+/**
+ * Retire le code à 4 chiffres d'un profil (code oublié)
+ */
+async function removeProfilePin(uid, profileName, currentPins) {
+    if (!await showConfirmationModal("Retirer le code", `Retirer le code du profil "${profileName}" ? N'importe qui pourra de nouveau passer sur ce profil, jusqu'à ce qu'un nouveau code soit choisi dans les Paramètres.`)) return;
+    try {
+        const pins = { ...(currentPins || {}) };
+        delete pins[profileName];
+        await updateDoc(doc(db, "users", uid), { profilePins: pins });
+        if (uid === currentUser.uid) currentUser.profilePins = pins;
+        showInfoModal("Succès", `Le code du profil "${profileName}" a été retiré.`);
+        await getUsers(true);
+        loadUsers();
+    } catch (error) {
+        console.error(error);
+        showInfoModal("Erreur", "Impossible de retirer le code.");
     }
 }
 
@@ -231,7 +269,11 @@ async function deleteProfile(uid, profileNameToDelete, currentProfiles) {
     if (await showConfirmationModal("Supprimer un profil", message)) {
         try {
             const updatedProfiles = currentProfiles.filter(p => p !== profileNameToDelete);
-            await updateDoc(doc(db, "users", uid), { profiles: updatedProfiles });
+            const user = (await getUsers()).find(u => u.id === uid);
+            const pins = { ...(user?.profilePins || {}) };
+            delete pins[profileNameToDelete];
+            await updateDoc(doc(db, "users", uid), { profiles: updatedProfiles, profilePins: pins });
+            if (uid === currentUser.uid) { currentUser.profiles = updatedProfiles; currentUser.profilePins = pins; }
             
             showInfoModal("Succès", `Le profil "${profileNameToDelete}" a été supprimé.`);
             await getUsers(true); 

@@ -1,6 +1,6 @@
 import { updatesLog } from './modules/updates-data.js';
 
-const APP_VERSION = 'v2.0.0';
+const APP_VERSION = 'v2.0.1';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -473,7 +473,8 @@ document.addEventListener('DOMContentLoaded', () => {
             isAdmin = false;
             isMasqueradingAsUser = false;
             isShowingAllHours = false;
-            localStorage.removeItem('currentProfileName');
+            // Le profil choisi n'est oublié que sur une vraie déconnexion (bouton « Déconnexion » des Paramètres) :
+            // une session interrompue (réseau coupé à l'ouverture…) ne doit pas faire perdre le profil du téléphone.
             authContainer.style.display = 'block';
             showAuthForm('login-form');
         }
@@ -832,13 +833,11 @@ export async function renderProfileSelection(userData) {
                         <span class="profile-name">${escapeHtml(profile)}</span>
                     </button>
                 `).join('')}
-                <button type="button" id="add-profile-btn" class="profile-card profile-card-add">
-                    <span class="profile-avatar" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                    </span>
-                    <span class="profile-name">Nouveau profil</span>
-                </button>
             </div>
+            <button type="button" id="add-profile-btn" class="btn btn-secondary profile-add-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Nouveau profil
+            </button>
         </div>
 
         <div id="customPromptModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="newProfileTitle">
@@ -857,8 +856,18 @@ export async function renderProfileSelection(userData) {
     `;
 
     document.querySelectorAll('.profile-card[data-name]').forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = async () => {
             const selectedName = btn.dataset.name;
+            // Profil protégé : on demande son code à 4 chiffres
+            if (hasProfilePin(selectedName)) {
+                const code = await askPin({
+                    title: `Code de ${selectedName}`,
+                    subtitle: 'Entrez le code à 4 chiffres de ce profil.',
+                    check: async (pin) => await hashProfilePin(selectedName, pin) === currentUser.profilePins[selectedName],
+                    forgotHint: "Code oublié ? Demandez à un administrateur de le retirer (Administration › Équipe).",
+                });
+                if (code === null) return;
+            }
             localStorage.setItem('currentProfileName', selectedName);
             showActiveProfile(selectedName);
             navigateTo('user-dashboard');
@@ -895,6 +904,110 @@ export async function renderProfileSelection(userData) {
             confirmBtn.textContent = 'Enregistrer';
             confirmBtn.disabled = false;
         }
+    });
+}
+
+// =====================================================================
+// CODE DE PROFIL (facultatif) : 4 chiffres demandés pour passer sur un profil protégé.
+// Seule une empreinte (SHA-256) du code est enregistrée, dans users/{uid}.profilePins.
+// =====================================================================
+export function hasProfilePin(profileName) {
+    return !!(currentUser?.profilePins || {})[profileName];
+}
+
+export async function hashProfilePin(profileName, pin) {
+    const data = new TextEncoder().encode(`${currentUser.uid}|${profileName}|${pin}`);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function saveProfilePin(profileName, pin) {
+    const pins = { ...(currentUser.profilePins || {}) };
+    if (pin === null) delete pins[profileName];
+    else pins[profileName] = await hashProfilePin(profileName, pin);
+    await updateDoc(doc(db, "users", currentUser.uid), { profilePins: pins });
+    currentUser.profilePins = pins;
+}
+
+/**
+ * Clavier à code façon téléphone. Renvoie le code saisi (4 chiffres), ou null si annulé.
+ * Avec `check`, le clavier reste ouvert tant que le code est faux.
+ */
+export function askPin({ title, subtitle = '', check = null, forgotHint = '' }) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.innerHTML = `
+            <div class="modal-panel modal-panel-sm pin-panel">
+                <div class="modal-body pin-body">
+                    <h3 class="modal-title"></h3>
+                    <p class="modal-text pin-subtitle"></p>
+                    <div class="pin-dots" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+                    <p class="pin-error" role="alert"></p>
+                    <div class="pin-pad">
+                        ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button type="button" class="pin-key" data-digit="${n}">${n}</button>`).join('')}
+                        <span></span>
+                        <button type="button" class="pin-key" data-digit="0">0</button>
+                        <button type="button" class="pin-key pin-key-back" data-back aria-label="Effacer">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="m18 9-6 6M12 9l6 6"/></svg>
+                        </button>
+                    </div>
+                    ${forgotHint ? '<p class="pin-hint"></p>' : ''}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary pin-cancel">Annuler</button>
+                </div>
+            </div>`;
+        overlay.querySelector('.modal-title').textContent = title;
+        overlay.querySelector('.pin-subtitle').textContent = subtitle;
+        if (forgotHint) overlay.querySelector('.pin-hint').textContent = forgotHint;
+        document.body.appendChild(overlay);
+
+        const dots = [...overlay.querySelectorAll('.pin-dots span')];
+        const error = overlay.querySelector('.pin-error');
+        let code = '';
+        let busy = false;
+
+        const render = () => dots.forEach((dot, i) => dot.classList.toggle('is-filled', i < code.length));
+        const close = (value) => {
+            document.removeEventListener('keydown', onKey, true);
+            overlay.remove();
+            resolve(value);
+        };
+        const press = async (digit) => {
+            if (busy || code.length >= 4) return;
+            error.textContent = '';
+            code += digit;
+            render();
+            if (code.length < 4) return;
+            busy = true;
+            const ok = check ? await check(code) : true;
+            if (ok) return close(code);
+            overlay.querySelector('.pin-panel').classList.add('pin-shake');
+            error.textContent = 'Code incorrect. Réessayez.';
+            if (navigator.vibrate) navigator.vibrate(120);
+            setTimeout(() => {
+                overlay.querySelector('.pin-panel').classList.remove('pin-shake');
+                code = '';
+                render();
+                busy = false;
+            }, 450);
+        };
+        const back = () => { if (!busy) { code = code.slice(0, -1); render(); } };
+        // Clavier physique (ordinateur) : chiffres, retour arrière, Échap
+        const onKey = (e) => {
+            if (/^[0-9]$/.test(e.key)) { e.preventDefault(); press(e.key); }
+            else if (e.key === 'Backspace') { e.preventDefault(); back(); }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(null); }
+        };
+        document.addEventListener('keydown', onKey, true);
+
+        overlay.querySelectorAll('[data-digit]').forEach(key => { key.onclick = () => press(key.dataset.digit); });
+        overlay.querySelector('[data-back]').onclick = back;
+        overlay.querySelector('.pin-cancel').onclick = () => close(null);
+        overlay.querySelector('.pin-key').focus();
     });
 }
 

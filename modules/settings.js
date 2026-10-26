@@ -1,4 +1,4 @@
-import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTheme, showUpdatesModal, getAppMode, setAppMode, switchProfile } from "../app.js";
+import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTheme, showUpdatesModal, getAppMode, setAppMode, switchProfile, askPin, hasProfilePin, hashProfilePin, saveProfilePin } from "../app.js";
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
@@ -20,6 +20,13 @@ export async function render() {
                         <span>Vous pointez avec ce profil sur ce téléphone.</span>
                     </div>
                     <button id="btn-switch-profile" class="btn btn-primary">Changer de profil</button>
+                </div>
+                <div class="profile-pin-row">
+                    <div class="active-profile-text">
+                        <strong>Code du profil</strong>
+                        <span id="profile-pin-status"></span>
+                    </div>
+                    <div id="profile-pin-actions" class="profile-pin-actions"></div>
                 </div>
             </div>
 
@@ -162,6 +169,7 @@ function setupEventListeners() {
     document.getElementById('settings-profile-name').textContent = activeProfileName;
     document.getElementById('settings-profile-avatar').textContent = (activeProfileName || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0].toUpperCase()).join('');
     document.getElementById('btn-switch-profile').onclick = () => switchProfile();
+    renderProfilePin(activeProfileName);
 
     // --- PROFIL ---
     document.getElementById('saveProfileBtn').onclick = async () => {
@@ -345,7 +353,11 @@ function setupEventListeners() {
     };
 
     // --- DÉCONNEXION ---
-    document.getElementById('logoutBtnSettings').onclick = () => signOut(auth);
+    document.getElementById('logoutBtnSettings').onclick = () => {
+        // Vraie déconnexion : on oublie aussi le profil choisi sur ce téléphone
+        localStorage.removeItem('currentProfileName');
+        signOut(auth);
+    };
 }
 
 // iPhone / iPad : Apple ne permet pas aux sites de lancer l'installation.
@@ -405,6 +417,61 @@ function updateThemeSelectionUI(selectedKey) {
             option.style.borderColor = 'transparent';
             option.style.boxShadow = 'none';
         }
+    });
+}
+
+// --- CODE DU PROFIL (4 chiffres, facultatif) ---
+function renderProfilePin(profileName) {
+    const status = document.getElementById('profile-pin-status');
+    const actions = document.getElementById('profile-pin-actions');
+    if (!status || !actions) return;
+    const locked = hasProfilePin(profileName);
+    status.textContent = locked
+        ? 'Activé : il sera demandé pour passer sur ce profil.'
+        : "Aucun code : n'importe qui peut passer sur ce profil.";
+    actions.innerHTML = locked
+        ? `<button type="button" id="change-pin-btn" class="btn btn-secondary">Modifier le code</button>
+           <button type="button" id="remove-pin-btn" class="btn btn-secondary">Retirer le code</button>`
+        : `<button type="button" id="add-pin-btn" class="btn btn-secondary">Ajouter un code</button>`;
+
+    const verifyCurrent = () => askPin({
+        title: 'Code actuel',
+        subtitle: `Entrez le code actuel de ${profileName}.`,
+        check: async (pin) => await hashProfilePin(profileName, pin) === currentUser.profilePins[profileName],
+    });
+    const chooseNew = async () => {
+        const first = await askPin({ title: 'Nouveau code', subtitle: 'Choisissez un code à 4 chiffres.' });
+        if (first === null) return;
+        const second = await askPin({
+            title: 'Confirmez le code',
+            subtitle: 'Entrez le même code une deuxième fois.',
+            check: async (pin) => pin === first,
+        });
+        if (second === null) return;
+        try {
+            await saveProfilePin(profileName, first);
+            showToast('Code du profil enregistré.', 'success');
+        } catch (error) {
+            console.error("Erreur d'enregistrement du code :", error);
+            showInfoModal("Erreur", "Impossible d'enregistrer le code. Vérifiez votre connexion.");
+        }
+        renderProfilePin(profileName);
+    };
+
+    document.getElementById('add-pin-btn')?.addEventListener('click', chooseNew);
+    document.getElementById('change-pin-btn')?.addEventListener('click', async () => {
+        if (await verifyCurrent() !== null) chooseNew();
+    });
+    document.getElementById('remove-pin-btn')?.addEventListener('click', async () => {
+        if (await verifyCurrent() === null) return;
+        try {
+            await saveProfilePin(profileName, null);
+            showToast('Code du profil retiré.', 'success');
+        } catch (error) {
+            console.error("Erreur de suppression du code :", error);
+            showInfoModal("Erreur", "Impossible de retirer le code. Vérifiez votre connexion.");
+        }
+        renderProfilePin(profileName);
     });
 }
 
