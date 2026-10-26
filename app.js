@@ -315,6 +315,8 @@ const OVERLAY_SELECTOR = '.modal, .fixed.inset-0.bg-black';
 const CLOSE_LABEL = /^(annuler|fermer|ok|compris|j'ai compris|retour|non)\b/i;
 
 function closeOverlay(overlay) {
+    // Fenêtres qui attendent un vrai choix : ni le fond ni Échap ne répondent à la place de l'utilisateur
+    if (overlay.hasAttribute('data-no-dismiss')) return;
     const closeBtn = [...overlay.querySelectorAll('button')].find(btn =>
         /cancel|close|fermer|annuler/i.test(btn.id) || CLOSE_LABEL.test(btn.textContent.trim())
     );
@@ -455,6 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 showActiveProfile(savedProfile);
                                 navigateTo('user-dashboard');
                                 checkForUpdates(userData, userRef, savedProfile);
+                                offerProfilePin(savedProfile);
                             } else {
                                 renderProfileSelection(userData);
                             }
@@ -863,7 +866,7 @@ export async function renderProfileSelection(userData) {
                 const code = await askPin({
                     title: `Code de ${selectedName}`,
                     subtitle: 'Entrez le code à 4 chiffres de ce profil.',
-                    check: async (pin) => await hashProfilePin(selectedName, pin) === currentUser.profilePins[selectedName],
+                    check: async (pin) => checkProfilePin(selectedName, pin),
                     forgotHint: "Code oublié ? Demandez à un administrateur de le retirer (Administration › Équipe).",
                 });
                 if (code === null) return;
@@ -872,6 +875,7 @@ export async function renderProfileSelection(userData) {
             showActiveProfile(selectedName);
             navigateTo('user-dashboard');
             checkForUpdates(currentUser, doc(db, "users", currentUser.uid), selectedName);
+            offerProfilePin(selectedName);
         };
     });
 
@@ -909,24 +913,112 @@ export async function renderProfileSelection(userData) {
 
 // =====================================================================
 // CODE DE PROFIL (facultatif) : 4 chiffres demandés pour passer sur un profil protégé.
-// Seule une empreinte (SHA-256) du code est enregistrée, dans users/{uid}.profilePins.
+// Le code est enregistré en clair dans users/{uid}.profilePins (nom du profil -> code) :
+// l'administrateur peut ainsi le retrouver (console Firebase ou Administration › Équipe)
+// quand quelqu'un l'a oublié. users/{uid}.profilePinDeclined retient les profils qui ont
+// répondu « Non merci » à la proposition, pour ne plus la leur faire.
 // =====================================================================
 export function hasProfilePin(profileName) {
     return !!(currentUser?.profilePins || {})[profileName];
 }
 
-export async function hashProfilePin(profileName, pin) {
-    const data = new TextEncoder().encode(`${currentUser.uid}|${profileName}|${pin}`);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+export function checkProfilePin(profileName, pin) {
+    return (currentUser?.profilePins || {})[profileName] === pin;
 }
 
 export async function saveProfilePin(profileName, pin) {
     const pins = { ...(currentUser.profilePins || {}) };
     if (pin === null) delete pins[profileName];
-    else pins[profileName] = await hashProfilePin(profileName, pin);
+    else pins[profileName] = pin;
     await updateDoc(doc(db, "users", currentUser.uid), { profilePins: pins });
     currentUser.profilePins = pins;
+}
+
+/**
+ * Choix d'un nouveau code (saisi deux fois). Renvoie true si le code a été enregistré.
+ */
+export async function setupProfilePin(profileName) {
+    const first = await askPin({ title: 'Nouveau code', subtitle: `Choisissez un code à 4 chiffres pour ${profileName}.` });
+    if (first === null) return false;
+    const second = await askPin({
+        title: 'Confirmez le code',
+        subtitle: 'Entrez le même code une deuxième fois.',
+        check: async (pin) => pin === first,
+    });
+    if (second === null) return false;
+    try {
+        await saveProfilePin(profileName, first);
+        showToast('Code du profil enregistré.', 'success');
+        return true;
+    } catch (error) {
+        console.error("Erreur d'enregistrement du code :", error);
+        showInfoModal("Erreur", "Impossible d'enregistrer le code. Vérifiez votre connexion.");
+        return false;
+    }
+}
+
+const isBlockedProfile = (name) => /extra|ne pas utiliser/i.test(name || '');
+
+/**
+ * Première utilisation d'un profil sans code : on propose (une seule fois) de le protéger.
+ * « Non merci » est retenu dans la fiche du compte ; le code reste réglable dans les Paramètres.
+ */
+export async function offerProfilePin(profileName) {
+    if (!currentUser || !profileName || isBlockedProfile(profileName)) return;
+    if (hasProfilePin(profileName) || (currentUser.profilePinDeclined || {})[profileName]) return;
+
+    // On attend que la fenêtre des nouveautés soit fermée, pour ne pas empiler deux fenêtres
+    const updatesModal = document.getElementById('updatesModal');
+    await new Promise((resolve) => {
+        const isOpen = () => updatesModal && !updatesModal.classList.contains('hidden');
+        setTimeout(() => {
+            if (!isOpen()) return resolve();
+            const observer = new MutationObserver(() => { if (!isOpen()) { observer.disconnect(); resolve(); } });
+            observer.observe(updatesModal, { attributes: true, attributeFilter: ['class'] });
+        }, 600);
+    });
+    if (localStorage.getItem('currentProfileName') !== profileName || hasProfilePin(profileName)) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('data-no-dismiss', '');
+    overlay.innerHTML = `
+        <div class="modal-panel modal-panel-sm">
+            <div class="modal-body pin-body">
+                <span class="pin-offer-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                </span>
+                <h3 class="modal-title">Protéger votre profil ?</h3>
+                <p class="modal-text"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-answer="no">Non merci</button>
+                <button type="button" class="btn btn-primary" data-answer="yes">Oui, choisir un code</button>
+            </div>
+        </div>`;
+    overlay.querySelector('.modal-text').textContent = `Voulez-vous protéger le profil « ${profileName} » avec un code à 4 chiffres ? Il sera demandé à quiconque veut passer sur votre profil. Vous pourrez le changer à tout moment dans les Paramètres.`;
+    document.body.appendChild(overlay);
+
+    const answer = await new Promise((resolve) => {
+        overlay.querySelectorAll('[data-answer]').forEach(btn => { btn.onclick = () => resolve(btn.dataset.answer); });
+    });
+    overlay.remove();
+
+    if (answer === 'yes') {
+        // Code abandonné en cours de route : la proposition reviendra à la prochaine ouverture
+        if (await setupProfilePin(profileName) && currentPageId === 'settings') navigateTo('settings');
+        return;
+    }
+    // « Non merci » : on ne le propose plus pour ce profil (réglable dans les Paramètres)
+    try {
+        const declined = { ...(currentUser.profilePinDeclined || {}), [profileName]: true };
+        await updateDoc(doc(db, "users", currentUser.uid), { profilePinDeclined: declined });
+        currentUser.profilePinDeclined = declined;
+    } catch (error) {
+        console.error("Impossible d'enregistrer le refus du code :", error);
+    }
 }
 
 /**

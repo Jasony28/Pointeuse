@@ -180,7 +180,7 @@ async function loadUsers() {
 
             profiles.forEach(profileName => {
                 const profileRow = document.createElement('div');
-                profileRow.className = 'flex justify-between items-center p-3 rounded-lg border transition-colors hover:shadow-md';
+                profileRow.className = 'flex justify-between items-center flex-wrap gap-2 p-3 rounded-lg border transition-colors hover:shadow-md';
                 profileRow.style.backgroundColor = 'var(--color-background)';
                 profileRow.style.borderColor = 'var(--color-border)';
 
@@ -213,8 +213,20 @@ async function loadUsers() {
 
                 // Code oublié : l'admin peut retirer le code du profil
                 const rowActions = document.createElement('div');
-                rowActions.className = 'flex items-center gap-2';
+                rowActions.className = 'flex items-center gap-2 flex-wrap justify-end';
                 if ((user.profilePins || {})[profileName]) {
+                    // Code oublié : l'admin peut le lire (masqué par défaut) ou le retirer
+                    const showPinBtn = document.createElement('button');
+                    showPinBtn.className = 'text-xs font-bold px-3 py-1.5 rounded transition-colors font-mono';
+                    showPinBtn.style.cssText = 'background-color: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-base);';
+                    showPinBtn.textContent = 'Voir le code';
+                    showPinBtn.onclick = () => {
+                        const visible = showPinBtn.dataset.visible === '1';
+                        showPinBtn.dataset.visible = visible ? '' : '1';
+                        showPinBtn.textContent = visible ? 'Voir le code' : `Code : ${user.profilePins[profileName]}`;
+                    };
+                    rowActions.appendChild(showPinBtn);
+
                     const resetPinBtn = document.createElement('button');
                     resetPinBtn.className = 'text-xs font-bold px-3 py-1.5 rounded transition-colors';
                     resetPinBtn.style.cssText = 'background-color: var(--color-primary-soft); color: var(--color-primary);';
@@ -271,9 +283,11 @@ async function deleteProfile(uid, profileNameToDelete, currentProfiles) {
             const updatedProfiles = currentProfiles.filter(p => p !== profileNameToDelete);
             const user = (await getUsers()).find(u => u.id === uid);
             const pins = { ...(user?.profilePins || {}) };
+            const declined = { ...(user?.profilePinDeclined || {}) };
             delete pins[profileNameToDelete];
-            await updateDoc(doc(db, "users", uid), { profiles: updatedProfiles, profilePins: pins });
-            if (uid === currentUser.uid) { currentUser.profiles = updatedProfiles; currentUser.profilePins = pins; }
+            delete declined[profileNameToDelete];
+            await updateDoc(doc(db, "users", uid), { profiles: updatedProfiles, profilePins: pins, profilePinDeclined: declined });
+            if (uid === currentUser.uid) { currentUser.profiles = updatedProfiles; currentUser.profilePins = pins; currentUser.profilePinDeclined = declined; }
             
             showInfoModal("Succès", `Le profil "${profileNameToDelete}" a été supprimé.`);
             await getUsers(true); 

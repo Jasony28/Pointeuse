@@ -1,4 +1,4 @@
-import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTheme, showUpdatesModal, getAppMode, setAppMode, switchProfile, askPin, hasProfilePin, hashProfilePin, saveProfilePin } from "../app.js";
+import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTheme, showUpdatesModal, getAppMode, setAppMode, switchProfile, askPin, hasProfilePin, checkProfilePin, saveProfilePin, setupProfilePin } from "../app.js";
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
@@ -437,24 +437,10 @@ function renderProfilePin(profileName) {
     const verifyCurrent = () => askPin({
         title: 'Code actuel',
         subtitle: `Entrez le code actuel de ${profileName}.`,
-        check: async (pin) => await hashProfilePin(profileName, pin) === currentUser.profilePins[profileName],
+        check: async (pin) => checkProfilePin(profileName, pin),
     });
     const chooseNew = async () => {
-        const first = await askPin({ title: 'Nouveau code', subtitle: 'Choisissez un code à 4 chiffres.' });
-        if (first === null) return;
-        const second = await askPin({
-            title: 'Confirmez le code',
-            subtitle: 'Entrez le même code une deuxième fois.',
-            check: async (pin) => pin === first,
-        });
-        if (second === null) return;
-        try {
-            await saveProfilePin(profileName, first);
-            showToast('Code du profil enregistré.', 'success');
-        } catch (error) {
-            console.error("Erreur d'enregistrement du code :", error);
-            showInfoModal("Erreur", "Impossible d'enregistrer le code. Vérifiez votre connexion.");
-        }
+        await setupProfilePin(profileName);
         renderProfilePin(profileName);
     };
 

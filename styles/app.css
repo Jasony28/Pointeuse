@@ -2002,3 +2002,11 @@ html.glass #page-content [style*="background-color: var(--color-surface)"] {
 }
 @media (prefers-reduced-motion: reduce) { .pin-shake { animation: none; } }
 @media (max-width: 360px) { .pin-pad { grid-template-columns: repeat(3, 64px); } .pin-key { width: 64px; height: 64px; } }
+.pin-offer-icon {
+    width: 52px; height: 52px; margin: 0 auto 0.875rem;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+}
+.pin-offer-icon svg { width: 26px; height: 26px; }

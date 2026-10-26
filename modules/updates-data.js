@@ -3,8 +3,8 @@ export const updatesLog = [
         version: 'v2.0.1',
         date: '26 octobre 2026',
         changes: [
-            "**Code de profil** : dans les Paramètres, vous pouvez protéger votre profil avec un code à 4 chiffres. Il sera demandé à quiconque veut passer sur votre profil.",
-            "Code oublié ? Un administrateur peut le retirer depuis la page Équipe.",
+            "**Code de profil** : vous pouvez protéger votre profil avec un code à 4 chiffres. Il sera demandé à quiconque veut passer sur votre profil. L'application vous le propose une fois ; ensuite, c'est dans les Paramètres.",
+            "Code oublié ? Demandez à un administrateur : il peut le retrouver ou le retirer.",
             "Quand vous rouvrez l'application, vous restez sur votre profil : pas besoin de le choisir ni de retaper le code.",
         ]
     },
