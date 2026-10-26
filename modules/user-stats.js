@@ -3,7 +3,7 @@
  Description: Page de statistiques utilisateur simplifiée, affichant les données du mois sélectionné.
 */
 import { collection, query, where, getDocs, orderBy, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent } from "../app.js";
+import { db, currentUser, pageContent, isActiveProfile } from "../app.js";
 
 // Garde en mémoire le mois actuellement affiché (0 = mois en cours, -1 = mois dernier, etc.)
 let currentMonthOffset = 0;
@@ -106,6 +106,8 @@ async function loadMonthlyStats() {
         querySnapshot.forEach(doc => {
             const p = doc.data();
             if (!p.endTime) return; // pointage en cours : pas encore de durée (évitait un total "NaN")
+            // Compte partagé : un employé ne compte que les heures de son profil (comme dans l'historique)
+            if (currentUser.role !== 'admin' && !isActiveProfile(p.userName)) return;
             const durationMs = (new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0);
             
             if (durationMs > 0) {

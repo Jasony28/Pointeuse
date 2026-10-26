@@ -1,5 +1,8 @@
 import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, doc, deleteDoc, updateDoc, writeBatch, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent, showInfoModal, showConfirmationModal } from "../app.js";
+import { db, currentUser, pageContent, showInfoModal, showConfirmationModal, getActiveProfileName, isActiveProfile } from "../app.js";
+
+// Demande de congé du profil actif (même compte ET même profil : un compte peut être partagé)
+const isMine = (entry) => entry.userId === currentUser.uid && isActiveProfile(entry.userName);
 import { getWeekDateRange } from "./utils.js";
 
 let currentWeekOffset = 0;
@@ -217,6 +220,10 @@ function setupEventListeners() {
 
         // Logique pour le bouton ANNULER (pour l'utilisateur ou l'admin)
         if (button.classList.contains('cancel-leave-btn')) {
+            if (currentUser.role !== 'admin' && !isMine(leaveData)) {
+                showInfoModal("Action impossible", "Vous ne pouvez annuler que vos propres demandes.");
+                return;
+            }
             const confirmed = await showConfirmationModal("Confirmation", "Êtes-vous sûr de vouloir annuler cette demande ? (Cela la retirera aussi du planning si elle était approuvée)");
             if (confirmed) {
                 try {
@@ -340,7 +347,7 @@ function displayLeaveList() {
 
         dayEntries.forEach(entry => {
             // Ne pas afficher les entrées des autres utilisateurs si elles sont en attente
-            if (entry.status === 'pending' && entry.userId !== currentUser.uid && currentUser.role !== 'admin') {
+            if (entry.status === 'pending' && !isMine(entry) && currentUser.role !== 'admin') {
                 return;
             }
 
@@ -349,8 +356,10 @@ function displayLeaveList() {
             if (entry.status === 'approved') {
                 statusStyle = 'background-color: rgba(22, 163, 74, 0.1); border-color: rgba(22, 163, 74, 0.4);';
                 statusText = 'Accepté';
-                 // Bouton Annuler visible même si accepté (pour l'admin ou l'utilisateur)
-                statusIcon = `<button class="cancel-leave-btn text-red-500 hover:text-red-700 text-xs font-bold" data-id="${entry.id}">ANNULER</button>`;
+                 // Bouton Annuler visible même si accepté, pour l'admin ou le profil qui a fait la demande
+                if (currentUser.role === 'admin' || isMine(entry)) {
+                    statusIcon = `<button class="cancel-leave-btn text-red-500 hover:text-red-700 text-xs font-bold" data-id="${entry.id}">ANNULER</button>`;
+                }
 
             } else if (entry.status === 'refused') {
                 statusStyle = 'background-color: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.4);';
@@ -371,7 +380,7 @@ function displayLeaveList() {
                             <button class="approve-leave-btn bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-2 py-1 rounded" data-id="${entry.id}">Accepter</button>
                         </div>`;
                 } 
-                else if (entry.userId === currentUser.uid) {
+                else if (isMine(entry)) {
                     statusIcon = `<button class="cancel-leave-btn text-red-500 hover:text-red-700 text-xs font-bold" data-id="${entry.id}">ANNULER</button>`;
                 }
             }
@@ -439,7 +448,7 @@ async function submitLeaveRequest(e) {
     // --- FIN VALIDATIONS ---
 
     const requestData = {
-        userId: currentUser.uid, userName: currentUser.displayName,
+        userId: currentUser.uid, userName: getActiveProfileName(),
         startDate, endDate, reason, status: 'pending',
         requestedAt: serverTimestamp()
     };

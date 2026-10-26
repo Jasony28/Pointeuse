@@ -1103,6 +1103,16 @@ export function askPin({ title, subtitle = '', check = null, forgotHint = '' }) 
     });
 }
 
+// Profil actif sur ce téléphone (plusieurs profils peuvent partager un même compte)
+export function getActiveProfileName() {
+    return localStorage.getItem('currentProfileName') || currentUser?.displayName || '';
+}
+
+// Une donnée (pointage, congé…) appartient-elle au profil actif ? Comparaison insensible à la casse
+export function isActiveProfile(name) {
+    return (name || '').trim().toLowerCase() === getActiveProfileName().trim().toLowerCase();
+}
+
 export function switchProfile() {
     localStorage.removeItem('currentProfileName');
     renderProfileSelection(currentUser);
