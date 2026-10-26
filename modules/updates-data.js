@@ -10,6 +10,7 @@ export const updatesLog = [
             "**Pointage** : minuteur repensé avec statut « en cours » ou « en pause », heure de démarrage et gros boutons Pause / Arrêter.",
             "**Mode sombre** : dans les Paramètres, choisissez Clair, Sombre ou Automatique, et votre couleur préférée.",
             "**Infos chantiers** : vos chantiers de la semaine apparaissent en premier, avec une recherche et des codes d'accès copiables d'un appui.",
+            "**Admin - Erreurs** : nouvelle page qui liste les erreurs rencontrées par l'équipe dans l'application (avec le profil et le téléphone), pour les corriger plus vite.",
             "**Mises à jour plus simples** : quand une nouvelle version sort, une fenêtre « Nouvelle version disponible » s'affiche. Appuyez sur « Mettre à jour ».",
         ]
     },

@@ -41,6 +41,7 @@ precaching.precacheAndRoute([
     { url: 'modules/admin-travel-report.js', revision: APP_VERSION },
     { url: 'modules/admin-live-view.js', revision: APP_VERSION },
     { url: 'modules/admin-site-requests.js', revision: APP_VERSION },
+    { url: 'modules/admin-errors.js', revision: APP_VERSION },
 
     // Ressources statiques
     { url: 'icons/pointeuse-192.png', revision: APP_VERSION },

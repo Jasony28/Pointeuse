@@ -4,7 +4,7 @@ const APP_VERSION = 'v2.0.0';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, deleteField, initializeFirestore, CACHE_SIZE_UNLIMITED, persistentLocalCache, persistentMultipleTabManager} from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, deleteField, initializeFirestore, CACHE_SIZE_UNLIMITED, persistentLocalCache, persistentMultipleTabManager, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
 // L'événement d'installation (beforeinstallprompt) est capturé dans index.html, avant le chargement de Firebase.
 
@@ -139,6 +139,7 @@ const icons = {
     users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
     alert: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>',
     inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+    bug: '<path d="M8 2l1.88 1.88M14.12 3.88 16 2M9 7.13v-1a3 3 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6zM12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4"/>',
     more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
 };
 
@@ -167,6 +168,7 @@ const adminTabs = [
     { id: 'admin-travel-report', name: 'Rapport trajets', icon: 'route' },
     { id: 'admin-hours-report', name: 'Rapport heures', icon: 'clock' },
     { id: 'admin-team', name: 'Équipe', short: 'Équipe', icon: 'users' },
+    { id: 'admin-errors', name: 'Erreurs', icon: 'bug' },
 ];
 
 // Libellés de fil d'Ariane pour les pages hors menu
@@ -744,7 +746,61 @@ export function showInfoModal(title, message) {
     modalCancelBtn.onclick = () => { genericModal.classList.add('hidden'); };
 }
 
+// =====================================================================
+// SUIVI DES ERREURS : chaque erreur chez un utilisateur est envoyée dans
+// la collection "errorLogs", consultable par l'admin (page Erreurs).
+// =====================================================================
 let currentPageId = null;
+const reportedErrors = new Set();
+let reportedCount = 0;
+let reporting = false;
+const MAX_REPORTS_PER_SESSION = 15;
+const originalConsoleError = console.error.bind(console);
+
+export function reportError(error, context = '') {
+    try {
+        if (reporting || !currentUser || reportedCount >= MAX_REPORTS_PER_SESSION) return;
+        const message = String(error?.message || error || 'Erreur inconnue').slice(0, 500);
+        // Les coupures réseau ne sont pas des bugs : inutile de les remonter
+        if (/offline|unavailable|failed to fetch|network/i.test(message) && !navigator.onLine) return;
+        const key = `${context}|${message}`;
+        if (reportedErrors.has(key)) return;
+        reportedErrors.add(key);
+        reportedCount++;
+        reporting = true;
+        addDoc(collection(db, "errorLogs"), {
+            message,
+            context: String(context).slice(0, 200),
+            stack: String(error?.stack || '').slice(0, 2000),
+            page: currentPageId || '',
+            uid: currentUser.uid,
+            // Profil actif sur ce téléphone (plusieurs profils partagent un compte)
+            userName: localStorage.getItem('currentProfileName') || currentUser.displayName || currentUser.email || '',
+            appVersion: APP_VERSION,
+            userAgent: navigator.userAgent.slice(0, 300),
+            online: navigator.onLine,
+            clientTime: new Date().toISOString(),
+            createdAt: serverTimestamp(),
+        }).catch(() => {}).finally(() => { reporting = false; });
+    } catch {
+        reporting = false;
+    }
+}
+
+window.addEventListener('error', (event) => {
+    // « Script error. » vient d'un script externe (Tailwind, Chart.js, extension du navigateur) :
+    // le navigateur cache le détail, il n'y a rien à corriger côté appli, on ne l'enregistre donc pas.
+    if (!event.error && /^Script error\.?$/i.test(String(event.message || '').trim())) return;
+    reportError(event.error || event.message, 'Erreur JavaScript');
+});
+window.addEventListener('unhandledrejection', (event) => reportError(event.reason, 'Promesse non gérée'));
+// Les erreurs déjà attrapées par les pages (console.error) sont aussi remontées
+console.error = (...args) => {
+    originalConsoleError(...args);
+    const error = args.find(a => a instanceof Error) || args.find(a => a && a.message);
+    const context = args.filter(a => typeof a === 'string').join(' ').slice(0, 200);
+    if (error || context) reportError(error || context, context);
+};
 
 // =====================================================================
 // PROFILS : plusieurs personnes peuvent partager un même compte e-mail.
