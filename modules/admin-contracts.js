@@ -69,23 +69,23 @@ function renderCardView(cardElement, user) {
     if (gsm) {
         gsmHtml = `
             <div id="gsm-container-${user.id}" class="gsm-trigger rounded-md -mx-2 px-2 py-1 transition-colors cursor-pointer">
-                <strong>📞 GSM :</strong> ${gsm}
+                <strong>GSM :</strong> ${gsm}
             </div>`;
     } else {
-        gsmHtml = `<p><strong>📞 GSM :</strong> <span style="color: var(--color-text-muted);">Non défini</span></p>`;
+        gsmHtml = `<p><strong>GSM :</strong> <span style="color: var(--color-text-muted);">Non défini</span></p>`;
     }
 
     cardElement.innerHTML = `
         <h3 class="text-2xl font-bold mb-5">${user.displayName}</h3>
         <div class="space-y-3 text-sm">
             ${gsmHtml}
-            <p><strong>🏠 Adresse :</strong> ${address ? `<a href="${googleMapsUrl}" target="_blank" class="hover:underline" style="color: var(--color-primary);">${address}</a>` : '<span style="color: var(--color-text-muted);">Non définie</span>'}</p>
-            <p><strong>💳 Registre Nat. :</strong> ${user.nationalRegistryNumber || '<span style="color: var(--color-text-muted);">Non défini</span>'}</p>
-            <p><strong>🏦 IBAN :</strong> ${user.iban || '<span style="color: var(--color-text-muted);">Non défini</span>'}</p>
-            <p><strong>🕒 Contrat :</strong> ${user.contractHours || 0} heures/semaine</p>
+            <p><strong>Adresse :</strong> ${address ? `<a href="${googleMapsUrl}" target="_blank" class="hover:underline" style="color: var(--color-primary);">${address}</a>` : '<span style="color: var(--color-text-muted);">Non définie</span>'}</p>
+            <p><strong>Registre national :</strong> ${user.nationalRegistryNumber || '<span style="color: var(--color-text-muted);">Non défini</span>'}</p>
+            <p><strong>IBAN :</strong> ${user.iban || '<span style="color: var(--color-text-muted);">Non défini</span>'}</p>
+            <p><strong>Contrat :</strong> ${user.contractHours || 0} heures/semaine</p>
         </div>
         <div class="mt-6">
-            <button class="edit-btn w-full font-semibold py-2 px-4 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Modifier</button>
+            <button class="edit-btn btn btn-secondary w-full">Modifier</button>
         </div>
         <style>
             .gsm-trigger:hover { background-color: rgba(128, 128, 128, 0.1); }

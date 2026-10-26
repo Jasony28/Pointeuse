@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v2.0.3',
+        date: '26 octobre 2026',
+        changes: [
+            "**Mes statistiques** : nouveau style, avec des flèches plus faciles à toucher pour changer de mois.",
+            "**Admin - Planification** : nouveau style. La liste de l'équipe propose maintenant chaque profil (et plus seulement le compte), pour que chacun voie bien son planning.",
+            "**Admin - Équipe** : fiches par compte, avec recherche, filtres et la liste des profils (historique, code et suppression de chaque profil).",
+            "**Admin - Congés** : demandes plus lisibles, avec le statut en couleur et les boutons Refuser / Approuver.",
+        ]
+    },
+    {
         version: 'v2.0.1',
         date: '26 octobre 2026',
         changes: [

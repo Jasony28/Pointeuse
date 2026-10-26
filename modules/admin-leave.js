@@ -5,16 +5,16 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-6">
             <div>
-                <h2 class="text-2xl font-bold">Gestion des Demandes de Congés</h2>
-                <p style="color: var(--color-text-muted);">Approuvez ou refusez les demandes de congé de votre équipe.</p>
+                <h2 class="text-2xl font-bold">Demandes de congés</h2>
+                <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Approuvez ou refusez les demandes de congé de votre équipe.</p>
             </div>
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <div id="leave-requests-list" class="space-y-4">
-                    <p class="text-center">Chargement des demandes...</p>
-                </div>
+            <div id="leave-requests-list" class="space-y-3">
+                <div class="page-loader"><div class="spinner" role="status" aria-label="Chargement"></div></div>
             </div>
         </div>
     `;
+    // Un seul écouteur : les rechargements de la liste n'en ajoutent pas d'autres
+    document.getElementById('leave-requests-list').addEventListener('click', handleAdminAction);
     setTimeout(loadAllRequests, 0);
 }
 async function loadAllRequests() {
@@ -25,7 +25,7 @@ async function loadAllRequests() {
         const snapshot = await getDocs(q);
 
         if (snapshot.empty) {
-            listContainer.innerHTML = '<p class="text-center text-gray-500">Aucune demande de congé pour le moment.</p>';
+            listContainer.innerHTML = '<p class="hours-empty">Aucune demande de congé pour le moment.</p>';
             return;
         }
 
@@ -56,23 +56,21 @@ async function loadAllRequests() {
             // On passe l'objet complet (qui contient l'id)
             listContainer.appendChild(createRequestElement(data.id, data));
         });
-
-        listContainer.addEventListener('click', handleAdminAction);
     } catch (error) {
         console.error("Erreur de chargement des demandes:", error);
-        listContainer.innerHTML = '<p class="text-center text-red-500">Erreur de chargement.</p>';
+        listContainer.innerHTML = '<p class="hours-empty">Erreur de chargement.</p>';
     }
 }
 
 function createRequestElement(id, data) {
+    const status = data.status === 'approved' || data.status === 'refused' ? data.status : 'pending';
     const el = document.createElement('div');
-    el.className = 'p-4 border rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4';
-    
-    // --- MODIFIÉ ---
+    el.className = `leave-card is-${status}`;
+
     // Utilisation de T00:00:00
     const startDate = new Date(data.startDate + 'T00:00:00');
     const endDate = new Date((data.endDate || data.startDate) + 'T00:00:00');
-    const options = { year: 'numeric', month: 'long', day: 'numeric' }; // timeZone: 'UTC' retiré
+    const options = { year: 'numeric', month: 'long', day: 'numeric' };
 
     let dateDisplay;
     if (startDate.getTime() === endDate.getTime()) {
@@ -81,36 +79,28 @@ function createRequestElement(id, data) {
         dateDisplay = `Du ${startDate.toLocaleDateString('fr-FR', options)} au ${endDate.toLocaleDateString('fr-FR', options)}`;
     }
 
-    let timeDisplay = '';
-    if (data.startTime && data.endTime) {
-        timeDisplay = `<p class="text-sm text-purple-700 font-semibold">De ${data.startTime} à ${data.endTime}</p>`;
-    }
-    
-    let statusBadge;
-    if (data.status === 'approved') {
-        statusBadge = '<span class="px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">Approuvé</span>';
-    } else if (data.status === 'refused') {
-        statusBadge = '<span class="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">Refusé</span>';
-    } else {
-        statusBadge = '<span class="px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800">En attente</span>';
-    }
+    const STATUS_LABELS = { approved: 'Approuvé', refused: 'Refusé', pending: 'En attente' };
 
     el.innerHTML = `
-        <div>
-            <p class="font-bold">${data.userName}</p>
-            <p class="text-gray-700">${dateDisplay}</p>
-            ${timeDisplay}
-            <p class="text-sm text-gray-500 mt-1">Raison: ${data.reason}</p>
+        <div class="leave-card-head">
+            <div class="min-w-0">
+                <p class="leave-card-name">${escapeHTML(data.userName)}</p>
+                <p class="text-sm font-semibold mt-0.5 leave-card-date" style="color: var(--color-primary);">${dateDisplay}</p>
+            </div>
+            <span class="leave-status is-${status}">${STATUS_LABELS[status]}</span>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
-            ${statusBadge}
-            <button data-id="${id}" data-action="approved" class="action-btn bg-green-500 hover:bg-green-600 text-white font-bold px-3 py-1 rounded ${data.status === 'approved' ? 'hidden' : ''}">Approuver</button>
-            <button data-id="${id}" data-action="refused" class="action-btn bg-red-500 hover:bg-red-600 text-white font-bold px-3 py-1 rounded ${data.status === 'refused' ? 'hidden' : ''}">Refuser</button>
-            <button data-id="${id}" data-action="delete" class="action-btn bg-gray-600 hover:bg-gray-700 text-white font-bold px-3 py-1 rounded">Supprimer</button>
+        <p class="leave-card-reason">${escapeHTML(data.reason)}</p>
+        ${data.startTime && data.endTime ? `<span class="leave-hours mt-1">de ${escapeHTML(data.startTime)} à ${escapeHTML(data.endTime)}</span>` : ''}
+        <div class="leave-card-actions">
+            ${status !== 'refused' ? `<button data-id="${id}" data-action="refused" class="action-btn btn btn-secondary">Refuser</button>` : ''}
+            ${status !== 'approved' ? `<button data-id="${id}" data-action="approved" class="action-btn btn btn-primary">Approuver</button>` : ''}
+            <button data-id="${id}" data-action="delete" class="action-btn icon-btn is-danger" title="Supprimer la demande" aria-label="Supprimer la demande"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>
         </div>
     `;
     return el;
 }
+
+const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /**
  * Met à jour la collection 'planning' en fonction d'un changement de statut de congé.

@@ -160,7 +160,7 @@ async function loadReport() {
                     const subRow = document.createElement('tr');
                     subRow.className = 'border-b text-sm text-gray-600 dark:text-gray-400';
                     subRow.innerHTML = `
-                        <td class="p-2 pl-8 flex items-center gap-2">↳ 👤 ${pName}</td>
+                        <td class="p-2 pl-8 flex items-center gap-2">↳ ${pName}</td>
                         <td class="p-2 text-right font-medium">${formatMilliseconds(pMs)}</td>
                     `;
                     reportBody.appendChild(subRow);
@@ -223,7 +223,7 @@ async function loadReport() {
                     const subRow = document.createElement('tr');
                     subRow.className = 'border-b text-sm text-gray-600 dark:text-gray-400';
                     subRow.innerHTML = `
-                        <td class="p-2 pl-8 flex items-center gap-2">↳ 👤 ${pName}</td>
+                        <td class="p-2 pl-8 flex items-center gap-2">↳ ${pName}</td>
                         <td class="p-2 text-center text-gray-400">-</td>
                         <td class="p-2 text-center font-medium">${formatMilliseconds(pMs)}</td>
                         <td class="p-2 text-center text-gray-400">-</td>

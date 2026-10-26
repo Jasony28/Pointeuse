@@ -14,40 +14,34 @@ let currentMonthOffset = 0;
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-6">
-            <div class="flex justify-between items-center">
-                <h1 class="text-2xl font-bold">Mes Statistiques</h1>
+            <div class="flex flex-wrap justify-between items-center gap-3">
+                <h1 class="text-2xl font-bold">Mes statistiques</h1>
                 
                 <div class="flex items-center gap-2">
-                    <button id="stats-prev-month" class="px-3 py-1 rounded-lg hover:opacity-80" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">&lt;</button>
-                    <span id="stats-month-display" class="font-semibold text-lg w-32 text-center"></span>
-                    <button id="stats-next-month" class="px-3 py-1 rounded-lg hover:opacity-80" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">&gt;</button>
+                    <button id="stats-prev-month" class="nav-arrow" aria-label="Mois précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                    <span id="stats-month-display" class="font-semibold text-lg w-36 text-center"></span>
+                    <button id="stats-next-month" class="nav-arrow" aria-label="Mois suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                 </div>
             </div>
 
-            <div id="stats-loader" class="text-center p-8">
-                <svg class="animate-spin h-8 w-8 mx-auto" style="color: var(--color-primary);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p class="mt-2" style="color: var(--color-text-muted);">Chargement des statistiques...</p>
-            </div>
+            <div id="stats-loader" class="page-loader"><div class="spinner" role="status" aria-label="Chargement des statistiques"></div></div>
 
             <div id="stats-content" class="hidden space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="p-4 rounded-lg shadow" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                        <div class="text-sm font-medium" style="color: var(--color-text-muted);">Total Heures (Mois)</div>
-                        <div id="stats-total-hours" class="text-3xl font-bold mt-1"></div>
+                    <div class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                        <div class="kpi-label">Total heures (mois)</div>
+                        <div id="stats-total-hours" class="kpi-value mt-1"></div>
                     </div>
                     
-                    <div id="stats-balance-card" class="p-4 rounded-lg shadow" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                        <div id="stats-balance-title" class="text-sm font-medium">Solde (Mois)</div>
-                        <div id="stats-balance-hours" class="text-3xl font-bold mt-1"></div>
+                    <div id="stats-balance-card" class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                        <div id="stats-balance-title" class="kpi-label">Solde (mois)</div>
+                        <div id="stats-balance-hours" class="kpi-value mt-1"></div>
                     </div>
                 </div>
 
-                <div class="p-4 rounded-lg shadow" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <div class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div class="flex justify-between items-center mb-3">
-                        <h2 class="text-lg font-bold">Top 5 Chantiers (Mois)</h2>
+                        <h2 class="text-lg font-bold">Top 5 chantiers (mois)</h2>
                     </div>
                     <ul id="stats-top5-list" class="space-y-2">
                         </ul>
@@ -133,7 +127,7 @@ async function loadMonthlyStats() {
 
     } catch (error) {
         console.error("Erreur lors du chargement des statistiques:", error);
-        pageContent.innerHTML += `<p class="text-red-500 text-center">Impossible de charger les statistiques.</p>`;
+        pageContent.innerHTML += `<p class="hours-empty">Impossible de charger les statistiques.</p>`;
     } finally {
         toggleLoading(false);
     }
@@ -145,7 +139,7 @@ async function loadMonthlyStats() {
 function toggleLoading(isLoading) {
     const loader = document.getElementById('stats-loader');
     const content = document.getElementById('stats-content');
-    if (loader) loader.style.display = isLoading ? 'block' : 'none';
+    if (loader) loader.style.display = isLoading ? 'flex' : 'none';
     if (content) content.style.display = isLoading ? 'none' : 'block';
 }
 
@@ -166,20 +160,20 @@ function renderSummary(totalHours, targetHours, balanceHours) {
     balanceHoursEl.style.color = 'var(--color-text-base)';
 
     if (targetHours === 0) {
-        balanceTitle.textContent = 'Solde (Contrat N/D)';
+        balanceTitle.textContent = 'Solde (contrat non défini)';
         balanceHoursEl.textContent = '-';
     } else if (balanceHours >= 0) {
-        balanceTitle.textContent = 'Heures Supp. (Mois)';
+        balanceTitle.textContent = 'Heures supp. (mois)';
         balanceHoursEl.textContent = `+${formatDecimalHours(balanceHours)}`;
         // Style positif (vert)
-        balanceTitle.style.color = 'rgb(34 197 94)';
-        balanceHoursEl.style.color = 'rgb(34 197 94)';
+        balanceTitle.style.color = 'var(--color-success)';
+        balanceHoursEl.style.color = 'var(--color-success)';
     } else {
-        balanceTitle.textContent = 'Heures Manquantes (Mois)';
+        balanceTitle.textContent = 'Heures manquantes (mois)';
         balanceHoursEl.textContent = formatDecimalHours(Math.abs(balanceHours));
         // Style négatif (orange)
-        balanceTitle.style.color = 'rgb(249 115 22)';
-        balanceHoursEl.style.color = 'rgb(249 115 22)';
+        balanceTitle.style.color = 'var(--color-warning)';
+        balanceHoursEl.style.color = 'var(--color-warning)';
     }
 }
 
