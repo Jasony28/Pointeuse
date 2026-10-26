@@ -21,37 +21,36 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
             
-            <div id="live-tracker-container" class="p-8 rounded-2xl shadow-2xl border-4" style="background-color: var(--color-surface); border-color: var(--color-primary);"></div>
-
-            <div class="text-center -mt-4">
-                <button id="openManualPointageBtn" class="text-sm font-medium hover:underline opacity-80 hover:opacity-100 transition-opacity" style="color: var(--color-text-base);">
-                    Oubli de pointage ? Ajouter des heures manuellement.
-                </button>
+            <div>
+                <div id="live-tracker-container" class="p-6 rounded-lg shadow-lg" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
+                <div class="manual-entry-link">
+                    <button id="openManualPointageBtn" type="button" class="link">Oubli de pointage ? Ajouter des heures manuellement</button>
+                </div>
             </div>
-            
+
             <div id="missed-pointage-suggestions" class="space-y-4"></div>
             <div id="unread-messages-container" class="hidden transform transition-all duration-300 hover:scale-[1.01] cursor-pointer"></div>
             
             <div>
-                <h2 class="text-xl font-bold mb-2" style="color: var(--color-text-base);">🗓️ Mon Planning de la Semaine</h2>
-                <div class="rounded-lg shadow-sm p-4 border" style="background-color: var(--color-surface); border-color: var(--color-border);">
-                    <div class="flex justify-between items-center">
-                        <button id="prevWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80 font-bold" style="background-color: var(--color-background); color: var(--color-text-base);"><</button>
-                        <div class="text-center"> 
-                            <div id="currentPeriodDisplay" class="font-semibold text-lg" style="color: var(--color-text-base);"></div>
-                            <div id="currentWeekTotalHours" class="text-sm font-bold" style="color: var(--color-primary);"></div>
+                <h2 class="text-xl font-bold mb-3">Mon planning de la semaine</h2>
+                <div class="rounded-lg shadow-sm p-3" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                    <div class="flex justify-between items-center gap-2">
+                        <button id="prevWeekBtn" class="nav-arrow" aria-label="Semaine précédente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><path d="m15 18-6-6 6-6"/></svg></button>
+                        <div class="text-center min-w-0">
+                            <div id="currentPeriodDisplay" class="font-semibold"></div>
+                            <div id="currentWeekTotalHours" class="week-total-pill"></div>
                         </div>
-                        <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80 font-bold" style="background-color: var(--color-background); color: var(--color-text-base);">></button>
+                        <button id="nextWeekBtn" class="nav-arrow" aria-label="Semaine suivante"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
                 </div>
-                <div id="schedule-grid" class="grid grid-cols-1 md:grid-cols-7 gap-2 mt-4"></div>
+                <div id="schedule-grid" class="schedule-grid grid grid-cols-1 md:grid-cols-7 gap-2 mt-3"></div>
             </div>
         </div>
 
         <div id="startPointageModal" class="hidden fixed inset-0 z-50 bg-black bg-opacity-60 flex justify-center items-center p-4">
             <div class="p-6 rounded-lg w-full max-w-md shadow-xl border" style="background-color: var(--color-surface); border-color: var(--color-border);">
                 <div class="mb-4 border-b pb-3" style="border-color: var(--color-border);">
-                    <h3 class="text-xl font-bold" style="color: var(--color-text-base);">Démarrer le Chrono</h3>
+                    <h3 class="text-xl font-bold" style="color: var(--color-text-base);">Démarrer un pointage</h3>
                     <p class="text-sm mt-1" style="color: var(--color-text-muted);">Pointage pour : <strong id="startActiveProfileDisplay" style="color: var(--color-primary);"></strong></p>
                 </div>
                 <form id="startPointageForm" class="space-y-4">
@@ -62,7 +61,7 @@ export async function render() {
                     
                     <div class="flex justify-end gap-4 pt-4 border-t" style="border-color: var(--color-border);">
                         <button type="button" id="cancelStartPointage" class="px-4 py-2 rounded font-bold transition-colors border" style="background-color: var(--color-background); color: var(--color-text-base); border-color: var(--color-border);">Annuler</button>
-                        <button type="submit" class="text-white px-6 py-2 rounded font-bold transition-colors hover:opacity-90" style="background-color: var(--color-primary);">▶️ Démarrer</button>
+                        <button type="submit" class="text-white px-6 py-2 rounded font-bold transition-colors hover:opacity-90" style="background-color: var(--color-primary);">Démarrer</button>
                     </div>
                 </form>
             </div>
@@ -82,7 +81,7 @@ export async function render() {
                         </div>
                         <div class="flex justify-end gap-4 pt-4 border-t" style="border-color: var(--color-border);">
                             <button type="button" id="cancelStopPointage" class="px-4 py-2 rounded font-bold transition-colors border" style="background-color: var(--color-background); color: var(--color-text-base); border-color: var(--color-border);">Annuler</button>
-                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded transition-colors">⏹️ Arrêter</button>
+                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded transition-colors">Arrêter et enregistrer</button>
                         </div>
                     </div>
                 </form>
@@ -92,7 +91,7 @@ export async function render() {
         <div id="manualPointageModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
             <div class="p-6 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <div class="mb-4 border-b pb-3" style="border-color: var(--color-border);">
-                    <h3 class="text-xl font-bold" style="color: var(--color-text-base);">Saisie Manuelle</h3>
+                    <h3 class="text-xl font-bold" style="color: var(--color-text-base);">Saisie manuelle</h3>
                     <p class="text-sm mt-1" style="color: var(--color-text-muted);">Pointage pour : <strong id="manualActiveProfileDisplay" style="color: var(--color-primary);"></strong></p>
                 </div>
                 <form id="manualPointageForm" class="space-y-5">
@@ -232,43 +231,47 @@ function initLiveTracker() {
 
     if (activePointage && activePointage.userName === activeProfileName) {
         const isPaused = activePointage.status === 'paused';
-        let chantierHTML = `<p class="text-3xl font-extrabold my-2 tracking-wide" style="color: var(--color-primary);">${activePointage.chantier}</p>`;
+        const startedAt = new Date(activePointage.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const pauseCount = (activePointage.pauses || []).length;
 
         container.innerHTML = `
-            <div class="text-center">
-                <p class="font-semibold tracking-wide uppercase text-sm mb-1" style="color: var(--color-text-muted);">Pointage en cours pour <strong style="color: var(--color-text-base);">${activeProfileName}</strong></p>
-                ${chantierHTML} 
-                <div id="timer" class="text-6xl font-black my-6 tracking-widest ${isPaused ? 'text-yellow-500' : ''}" style="color: var(--color-text-base);">00:00:00</div>
-                ${isPaused ? '<p class="text-yellow-600 font-bold mb-4 text-xl tracking-widest uppercase animate-pulse">PAUSE</p>' : ''}
-                <div class="flex flex-col sm:flex-row gap-4 justify-center mt-6">
-                    <button id="pauseResumeBtn" class="w-full sm:w-1/3 font-bold px-8 py-5 rounded-xl text-xl shadow-lg transition-transform hover:scale-105 ${isPaused ? 'bg-green-600 text-white' : 'bg-yellow-500 text-white'}">${isPaused ? '▶️ Reprendre' : '⏸️ Pause'}</button>
-                    <button id="stopBtn" class="w-full sm:w-1/3 bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-5 rounded-xl text-xl shadow-lg transition-transform hover:scale-105">⏹️ Arrêter</button>
+            <div class="tracker ${isPaused ? 'is-paused' : 'is-running'}">
+                <span class="tracker-status"><span class="tracker-dot"></span>${isPaused ? 'En pause' : 'Pointage en cours'} · ${escapeHTML(activeProfileName)}</span>
+                <p class="tracker-chantier">${escapeHTML(activePointage.chantier)}</p>
+                <div id="timer" class="tracker-timer">00:00:00</div>
+                <p class="tracker-meta">Démarré à ${startedAt}${pauseCount > 0 ? ` · ${pauseCount} pause${pauseCount > 1 ? 's' : ''}` : ''}</p>
+                <div class="tracker-actions">
+                    <button id="pauseResumeBtn" class="tracker-btn ${isPaused ? 'tracker-btn-resume' : 'tracker-btn-pause'}">${isPaused ? 'Reprendre' : 'Pause'}</button>
+                    <button id="stopBtn" class="tracker-btn tracker-btn-stop">Arrêter</button>
                 </div>
             </div>`;
 
         updateTimerUI();
+        clearInterval(timerInterval);
         if (!isPaused) timerInterval = setInterval(updateTimerUI, 1000);
         document.getElementById('pauseResumeBtn').onclick = isPaused ? resumePointage : pausePointage;
         document.getElementById('stopBtn').onclick = openStopModal;
     } else {
         // --- BLOCAGE VISUEL DU BOUTON DÉMARRER ---
+        const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
         if (isForbidden) {
             container.innerHTML = `
-                <div class="text-center py-6">
-                    <h3 class="text-3xl font-extrabold mb-3" style="color: var(--color-text-base);">Profil non autorisé</h3>
-                    <p class="mb-8 text-lg" style="color: var(--color-text-muted);">Vous êtes sur le profil : <strong class="text-red-500">${activeProfileName}</strong></p>
-                    <button disabled class="w-full md:w-auto text-white font-bold px-10 py-5 rounded-xl text-xl shadow-xl bg-gray-400 cursor-not-allowed opacity-70">
-                        ⛔ Pointage désactivé
-                    </button>
+                <div class="tracker is-idle">
+                    <p class="tracker-greeting">Profil : ${escapeHTML(activeProfileName)}</p>
+                    <h3 class="tracker-idle-title">Ce profil ne peut pas pointer</h3>
+                    <p class="tracker-meta">Changez de profil dans les Paramètres pour démarrer un pointage.</p>
+                    <button disabled class="tracker-btn tracker-btn-start">Pointage désactivé</button>
                 </div>`;
         } else {
+            const hour = new Date().getHours();
+            const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
+            const firstName = (activeProfileName || '').split(' ')[0];
             container.innerHTML = `
-                <div class="text-center py-6">
-                    <h3 class="text-3xl font-extrabold mb-3" style="color: var(--color-text-base);">Prêt à démarrer ?</h3>
-                    <p class="mb-8 text-lg" style="color: var(--color-text-muted);">Profil actif : <strong style="color: var(--color-primary);">${activeProfileName}</strong></p>
-                    <button id="startBtn" class="w-full md:w-auto text-white font-bold px-10 py-5 rounded-xl text-xl shadow-xl transition-transform hover:scale-105" style="background-color: var(--color-primary);">
-                        ▶️ Démarrer le Chrono
-                    </button>
+                <div class="tracker is-idle">
+                    <p class="tracker-greeting">${greeting}${firstName ? ` ${escapeHTML(firstName)}` : ''}</p>
+                    <h3 class="tracker-idle-title">Prêt à commencer votre journée ?</h3>
+                    <p class="tracker-meta">${today}</p>
+                    <button id="startBtn" class="tracker-btn tracker-btn-start">Démarrer un pointage</button>
                 </div>`;
         }
     }
@@ -545,17 +548,17 @@ function displayWeekView() {
     if(scheduleGrid) {
         scheduleGrid.innerHTML = ""; 
         const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+        const todayStr = new Date().toISOString().split('T')[0];
         for (let i = 0; i < 7; i++) {
             const dayDate = new Date(startOfWeek);
             dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
+            const isToday = dayDate.toISOString().split('T')[0] === todayStr;
             const dayColumn = document.createElement('div');
-            dayColumn.className = 'rounded-lg p-2 min-h-[100px] border';
-            dayColumn.style.backgroundColor = 'var(--color-background)';
-            dayColumn.style.borderColor = 'var(--color-border)';
-            dayColumn.innerHTML = `<h4 class="font-bold text-center border-b pb-1 mb-2" style="border-color: var(--color-border);">
-                                        <span style="color: var(--color-text-base);">${days[i]}</span> 
-                                        <span class="text-sm font-normal" style="color: var(--color-text-muted);">${dayDate.getUTCDate()}</span>
-                                        <div id="day-total-${i}" class="text-sm font-bold mt-1" style="color: var(--color-primary); min-height: 1.25rem;"></div>
+            dayColumn.className = `schedule-day${isToday ? ' is-today' : ''}`;
+            dayColumn.innerHTML = `<h4 class="schedule-day-head">
+                                        <span class="schedule-day-name">${days[i]}${isToday ? ' <span class="schedule-today-badge">Aujourd\'hui</span>' : ''}</span>
+                                        <span class="schedule-day-date">${dayDate.getUTCDate()}</span>
+                                        <span id="day-total-${i}" class="schedule-day-total"></span>
                                     </h4>
                                     <div id="day-col-${i}" class="space-y-2"></div>`;
             scheduleGrid.appendChild(dayColumn);
@@ -623,12 +626,9 @@ async function loadUserScheduleForWeek(start, end) {
 
 function createTaskElement(task, chantierDetails) {
     const el = document.createElement('div');
-    el.className = 'p-3 rounded-lg shadow-sm border-l-4 text-sm hover:shadow-md transition-shadow border-y border-r';
+    el.className = 'schedule-task p-3 rounded-lg shadow-sm border-l-4 text-sm';
     el.style.backgroundColor = 'var(--color-surface)';
-    el.style.borderLeftColor = 'var(--color-primary)';
-    el.style.borderTopColor = 'var(--color-border)';
-    el.style.borderBottomColor = 'var(--color-border)';
-    el.style.borderRightColor = 'var(--color-border)';
+    el.style.borderColor = 'var(--color-primary)';
     
     const teamNames = task.teamNames || [];
     const teamCount = teamNames.length;
@@ -742,6 +742,17 @@ async function handleSuggestionClick(e) {
         }
     }
     button.closest('div.border-l-4').remove();
+}
+
+const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Appelé par app.js quand on quitte la page : on arrête le minuteur et l'écoute des messages
+export function cleanup() {
+    clearInterval(timerInterval);
+    if (unreadListener) {
+        unreadListener();
+        unreadListener = null;
+    }
 }
 
 function formatDecimalHours(decimalHours) {

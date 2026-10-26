@@ -15,7 +15,7 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-6">
             <div class="flex justify-between items-center">
-                <h1 class="text-2xl font-bold">📊 Mes Statistiques</h1>
+                <h1 class="text-2xl font-bold">Mes Statistiques</h1>
                 
                 <div class="flex items-center gap-2">
                     <button id="stats-prev-month" class="px-3 py-1 rounded-lg hover:opacity-80" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">&lt;</button>
@@ -105,6 +105,7 @@ async function loadMonthlyStats() {
 
         querySnapshot.forEach(doc => {
             const p = doc.data();
+            if (!p.endTime) return; // pointage en cours : pas encore de durée (évitait un total "NaN")
             const durationMs = (new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0);
             
             if (durationMs > 0) {

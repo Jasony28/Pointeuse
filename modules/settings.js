@@ -1,6 +1,4 @@
-// DANS : modules/settings.js
-
-import { pageContent, currentUser, showInfoModal, db, themes, applyTheme, showUpdatesModal, switchProfile } from "../app.js";
+import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTheme, showUpdatesModal, getAppMode, setAppMode, switchProfile } from "../app.js";
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
@@ -9,102 +7,132 @@ const auth = getAuth();
 
 export async function render() {
     pageContent.innerHTML = `
-        <div class="max-w-3xl mx-auto space-y-8">
-             <div>
-                <h2 class="text-3xl font-bold" style="color: var(--color-text-base);">⚙️ Paramètres</h2>
-                <p style="color: var(--color-text-muted);">Gérez vos informations de profil et les réglages de l'application.</p>
+        <div class="max-w-3xl mx-auto space-y-6 pb-12">
+            <h2 class="text-3xl font-bold tracking-tight mb-6">Paramètres</h2>
+
+            <!-- Profil actif (plusieurs profils peuvent partager un compte) -->
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Profil actif</h3>
+                <div class="active-profile-row">
+                    <span id="settings-profile-avatar" class="profile-avatar profile-avatar-sm" aria-hidden="true"></span>
+                    <div class="active-profile-text">
+                        <strong id="settings-profile-name"></strong>
+                        <span>Vous pointez avec ce profil sur ce téléphone.</span>
+                    </div>
+                    <button id="btn-switch-profile" class="btn btn-primary">Changer de profil</button>
+                </div>
             </div>
 
-            <!-- NOUVEAU : CARTE DE CHANGEMENT DE PROFIL -->
-            <div class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-2" style="color: var(--color-text-base);">Gestion du profil</h3>
-                <p class="text-sm mb-4" style="color: var(--color-text-muted);">Vous êtes actuellement connecté en tant que <strong id="settings-profile-name" style="color: var(--color-primary);"></strong>.</p>
-                <button id="btn-switch-profile" class="px-6 py-3 rounded-lg font-bold text-white shadow-md transition-transform hover:scale-105" style="background-color: var(--color-primary);">
-                    🔄 Changer de profil
-                </button>
-            </div>
-
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">Mon Profil Global</h3>
+            <!-- Profil -->
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Compte principal</h3>
                 <div class="space-y-4">
                     <div>
-                        <label for="displayNameInput" class="text-sm font-medium" style="color: var(--color-text-base);">Nom d'affichage (Compte principal)</label>
-                        <input id="displayNameInput" type="text" value="${currentUser.displayName}" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">
+                        <label class="block text-sm font-medium mb-1">Nom d'affichage</label>
+                        <input id="displayNameInput" type="text" value="${currentUser.displayName || ''}" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);">
                     </div>
-                    <div class="text-right">
-                        <button id="saveProfileBtn" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary);">Enregistrer le nom</button>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Rôle</label>
+                        <input type="text" value="${currentUser.role === 'admin' ? 'Administrateur' : 'Employé'}" disabled class="w-full border p-2 rounded opacity-50 cursor-not-allowed" style="background-color: var(--color-background); border-color: var(--color-border);">
+                    </div>
+                    <div class="text-right mt-4">
+                        <button id="saveProfileBtn" class="btn btn-primary">Enregistrer le profil</button>
                     </div>
                 </div>
             </div>
 
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">🛡️ Sécurité et Compte</h3>
+            <!-- Sécurité -->
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Sécurité et Compte</h3>
                 
-                <div class="flex justify-between items-center">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                     <p class="text-sm" style="color: var(--color-text-muted);">Recevoir un e-mail pour changer votre mot de passe.</p>
-                    <button id="changePasswordBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border);">
+                    <button id="changePasswordBtn" class="btn btn-secondary">
                         Changer le mot de passe
                     </button>
                 </div>
 
                 <div class="border-t my-4" style="border-color: var(--color-border);"></div>
-                <div class="flex justify-between items-center">
-                    <p class="text-sm" style="color: var(--color-text-muted);">Modifier votre e-mail de connexion.</p>
-                    <button id="changeEmailBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border);">
+                
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                    <div>
+                        <p class="text-sm" style="color: var(--color-text-muted);">Modifier votre e-mail de connexion.</p>
+                        <p class="text-xs font-semibold mt-1" style="color: var(--color-text-base);">Actuel : ${currentUser.email}</p>
+                    </div>
+                    <button id="changeEmailBtn" class="btn btn-secondary">
                         Changer l'e-mail
                     </button>
                 </div>
             </div>
 
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">🗂️ Gestion des Données</h3>
-                <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 1rem;">Télécharger l'intégralité de votre historique (Heures & KM).</p>
+            <!-- Export PDF -->
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Gestion des Données</h3>
+                <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 1rem;">Télécharger l'intégralité de votre historique de pointages.</p>
                 <div class="flex">
-                    <button id="exportPdfBtn" class="font-bold w-full px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-primary); color: var(--color-primary);">
+                    <button id="exportPdfBtn" class="btn btn-secondary btn-block">
                         Exporter mon historique (PDF)
                     </button>
                 </div>
             </div>
 
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4" style="color: var(--color-text-base);">Thème de l'application</h3>
-                <div id="theme-selector" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <!-- BLOC INSTALLATION APP -->
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Télécharger l'application</h3>
+                <p class="text-sm mb-4" style="color: var(--color-text-muted);">Installez la pointeuse directement sur votre écran d'accueil pour y accéder en 1 clic, comme une vraie application !</p>
+                <button id="installAppBtn" class="btn btn-primary btn-lg btn-block">
+                    Télécharger l'application
+                </button>
+            </div>
+
+            <!-- Thèmes -->
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Thème de l'application</h3>
+                <div class="segmented" role="group" aria-label="Mode d'affichage" id="mode-selector" style="width: 100%; margin-bottom: 0.5rem;">
+                    <button type="button" data-mode="light" style="flex: 1;">Clair</button>
+                    <button type="button" data-mode="dark" style="flex: 1;">Sombre</button>
+                    <button type="button" data-mode="auto" style="flex: 1;">Automatique</button>
+                </div>
+                <div id="theme-selector" class="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-2">
                     ${Object.entries(themes).map(([key, theme]) => `
-                        <div class="theme-option p-4 rounded-lg cursor-pointer border-2 flex items-center justify-center h-20 transition-all" style="background-color: ${theme.preview};" data-theme-key="${key}">
-                            <p class="font-semibold text-center" style="color: ${theme.colors['--color-text-base']}">${theme.name}</p>
-                        </div>
+                        <button class="theme-option flex flex-col items-center p-3 rounded-lg border-2 transition-all" data-theme-key="${key}" style="border-color: transparent;" aria-label="Thème ${theme.name}">
+                            <div class="w-10 h-10 rounded-full mb-2 border shadow-inner" style="background-color: ${theme.preview}; border-color: var(--color-border);"></div>
+                            <span class="text-sm font-medium" style="color: var(--color-text-base);">${theme.name}</span>
+                        </button>
                     `).join('')}
                 </div>
             </div>
-            
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">À propos de l'application</h3>
-                <div class="flex justify-between items-center">
-                    <p class="text-sm" style="color: var(--color-text-muted);">Consultez les dernières améliorations et corrections.</p>
-                    <button id="showUpdatesBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-primary); color: var(--color-primary);">
-                        Voir les nouveautés
-                    </button>
-                </div>
+
+            <!-- Nouveautés -->
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Nouveautés</h3>
+                <p class="text-sm mb-4" style="color: var(--color-text-muted);">Consultez les dernières mises à jour de l'application.</p>
+                <button id="showUpdatesBtn" class="btn btn-secondary">
+                    Voir le journal des mises à jour
+                </button>
             </div>
 
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">Donner un feedback</h3>
+            <!-- Feedback -->
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Donner un feedback</h3>
                 <p class="text-sm" style="color: var(--color-text-muted);">Une idée d'amélioration ? Un bug à signaler ? Vos retours sont précieux.</p>
                 <textarea id="feedbackTextarea" class="w-full border p-2 rounded mt-3 h-24" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);" placeholder="Votre idée ici..."></textarea>
                 <div class="text-right mt-3">
-                    <button id="sendFeedbackBtn" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary);">Ouvrir mon e-mail pour envoyer</button>
+                    <button id="sendFeedbackBtn" class="btn btn-primary">Ouvrir mon e-mail pour envoyer</button>
                 </div>
             </div>
 
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+            <!-- Déconnexion -->
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                  <div class="text-center">
-                    <button id="logoutBtnSettings" class="bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-3 rounded-lg">
-                        Se déconnecter de ${currentUser.email}
+                    <button id="logoutBtnSettings" class="btn btn-danger btn-lg btn-block">
+                        Déconnexion
                     </button>
                 </div>
             </div>
         </div>
 
+        <!-- Modal Changer Email -->
         <div id="changeEmailModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
             <div class="p-6 rounded-lg shadow-xl w-full max-w-sm" style="background-color: var(--color-surface);">
                 <h3 class="text-xl font-bold mb-4">Changer l'e-mail de connexion</h3>
@@ -118,8 +146,8 @@ export async function render() {
                         <input id="currentPasswordInput" type="password" required class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);">
                     </div>
                     <div class="flex justify-end gap-4 pt-4">
-                        <button type="button" id="cancelChangeEmailBtn" class="font-bold px-6 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
-                        <button type="submit" id="confirmChangeEmailBtn" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary);">Valider</button>
+                        <button type="button" id="cancelChangeEmailBtn" class="btn btn-secondary">Annuler</button>
+                        <button type="submit" id="confirmChangeEmailBtn" class="btn btn-primary">Valider</button>
                     </div>
                 </form>
             </div>
@@ -129,27 +157,62 @@ export async function render() {
 }
 
 function setupEventListeners() {
-    // --- GESTION DU PROFIL ---
+    // --- PROFIL ACTIF ---
     const activeProfileName = localStorage.getItem('currentProfileName') || currentUser.displayName;
     document.getElementById('settings-profile-name').textContent = activeProfileName;
+    document.getElementById('settings-profile-avatar').textContent = (activeProfileName || '?').trim().split(/\s+/).slice(0, 2).map(part => part[0].toUpperCase()).join('');
+    document.getElementById('btn-switch-profile').onclick = () => switchProfile();
 
-    document.getElementById('btn-switch-profile').onclick = () => {
-        switchProfile();
-    };
-
-    // --- PROFIL GLOBAL ---
+    // --- PROFIL ---
     document.getElementById('saveProfileBtn').onclick = async () => {
         const newName = document.getElementById('displayNameInput').value.trim();
         if (newName && newName !== currentUser.displayName) {
             try {
-                const userRef = doc(db, "users", currentUser.uid);
-                await updateDoc(userRef, { displayName: newName });
-                showInfoModal("Succès", "Votre nom a été mis à jour. Il sera visible au prochain rechargement.");
+                await updateDoc(doc(db, "users", currentUser.uid), { displayName: newName });
+                currentUser.displayName = newName;
+                document.getElementById('currentUserDisplay').textContent = newName;
+                showInfoModal("Succès", "Votre profil a été mis à jour.");
             } catch (error) {
+                console.error("Erreur de mise à jour:", error);
                 showInfoModal("Erreur", "La mise à jour a échoué.");
             }
         }
     };
+
+    // --- INSTALLATION PWA ---
+    const installBtn = document.getElementById('installAppBtn');
+    if (installBtn) {
+        // Appli déjà installée : écran d'accueil (PWA) ou appli App Store / Play Store (Capacitor)
+        const isNativeApp = !!window.Capacitor?.isNativePlatform?.();
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || isNativeApp;
+        
+        if (isStandalone) {
+            installBtn.innerHTML = "✅ Application déjà installée";
+            installBtn.classList.remove('hover:scale-105');
+            installBtn.style.backgroundColor = '#16a34a'; 
+            installBtn.disabled = true;
+            installBtn.style.opacity = '0.7';
+        } else {
+            installBtn.addEventListener('click', async () => {
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                
+                if (isIOS) {
+                    showIOSInstallSheet();
+                } else if (window.deferredPrompt || await waitForInstallPrompt(3000)) {
+                    window.deferredPrompt.prompt();
+                    const { outcome } = await window.deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        installBtn.innerHTML = "✅ Application installée";
+                        installBtn.style.backgroundColor = '#16a34a';
+                        installBtn.disabled = true;
+                    }
+                    window.deferredPrompt = null;
+                } else {
+                    showToast("L'application est déjà installée sur cet appareil, ou ce navigateur ne permet pas l'installation.", 'info');
+                }
+            });
+        }
+    }
 
     // --- SÉCURITÉ : MOT DE PASSE ---
     document.getElementById('changePasswordBtn').onclick = async () => {
@@ -204,6 +267,9 @@ function setupEventListeners() {
             emailModal.classList.add('hidden');
             document.getElementById('changeEmailForm').reset();
             currentUser.email = newEmail; 
+            
+            // On recharge la vue pour afficher le nouvel email
+            render(); 
 
         } catch (error) {
             console.error("Erreur de mise à jour e-mail:", error.code);
@@ -221,6 +287,7 @@ function setupEventListeners() {
             confirmBtn.textContent = "Valider";
         }
     };
+
 
     // --- EXPORT PDF ---
     document.getElementById('exportPdfBtn').onclick = async (e) => {
@@ -247,9 +314,15 @@ function setupEventListeners() {
         });
     });
 
+    // --- MODE CLAIR / SOMBRE ---
+    const modeButtons = document.querySelectorAll('#mode-selector [data-mode]');
+    const refreshModeUI = () => modeButtons.forEach(b => b.classList.toggle('is-active', b.dataset.mode === getAppMode()));
+    modeButtons.forEach(b => b.onclick = () => { setAppMode(b.dataset.mode); refreshModeUI(); });
+    refreshModeUI();
+
     // --- NOUVEAUTÉS ---
     document.getElementById('showUpdatesBtn').onclick = () => {
-        showUpdatesModal(updatesLog);
+        showUpdatesModal(updatesLog); 
     };
 
     // --- FEEDBACK ---
@@ -275,19 +348,69 @@ function setupEventListeners() {
     document.getElementById('logoutBtnSettings').onclick = () => signOut(auth);
 }
 
+// iPhone / iPad : Apple ne permet pas aux sites de lancer l'installation.
+// On affiche une feuille visuelle qui montre exactement où appuyer dans Safari.
+function showIOSInstallSheet() {
+    document.getElementById('iosInstallSheet')?.remove();
+    const shareIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>`;
+    const addIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>`;
+    const isSafari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+
+    const sheet = document.createElement('div');
+    sheet.id = 'iosInstallSheet';
+    sheet.className = 'modal ios-install';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.innerHTML = `
+        <div class="modal-panel">
+            <div class="modal-body">
+                <div class="ios-install-head">
+                    <img src="./icons/pointeuse-192.png" alt="" class="ios-install-icon">
+                    <div>
+                        <h3 class="modal-title">Installer Pointeuse</h3>
+                        <p class="modal-text" style="margin-top: 0.125rem;">2 appuis, et l'appli est sur votre écran d'accueil.</p>
+                    </div>
+                </div>
+                <ol class="ios-steps">
+                    <li><span class="ios-step-num">1</span><span>Appuyez sur <span class="ios-key">${shareIcon} Partager</span> ${isSafari ? 'dans la barre en bas de Safari' : 'dans votre navigateur'}</span></li>
+                    <li><span class="ios-step-num">2</span><span>Choisissez <span class="ios-key">${addIcon} Sur l'écran d'accueil</span>, puis <strong>Ajouter</strong></span></li>
+                </ol>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="closeIosInstallBtn" class="btn btn-primary btn-block">C'est compris</button>
+            </div>
+        </div>
+        ${isSafari ? '<div class="ios-install-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M6 14l6 6 6-6"/></svg></div>' : ''}
+    `;
+    document.body.appendChild(sheet);
+    sheet.querySelector('#closeIosInstallBtn').onclick = () => sheet.remove();
+}
+
+// Le navigateur peut accorder l'installation quelques instants après le chargement :
+// on l'attend brièvement plutôt que d'afficher tout de suite le message de secours.
+function waitForInstallPrompt(timeoutMs) {
+    return new Promise(resolve => {
+        const onPrompt = () => { clearTimeout(timer); setTimeout(() => resolve(!!window.deferredPrompt), 0); };
+        const timer = setTimeout(() => { window.removeEventListener('beforeinstallprompt', onPrompt); resolve(false); }, timeoutMs);
+        window.addEventListener('beforeinstallprompt', onPrompt, { once: true });
+    });
+}
+
 function updateThemeSelectionUI(selectedKey) {
     document.querySelectorAll('.theme-option').forEach(option => {
-        const primaryColor = themes[selectedKey].colors['--color-primary'];
         if (option.dataset.themeKey === selectedKey) {
-            option.style.borderColor = primaryColor;
-            option.style.boxShadow = `0 0 0 2px ${primaryColor}`;
+            option.style.borderColor = 'var(--color-primary)';
+            option.style.boxShadow = '0 0 0 2px var(--color-primary)';
         } else {
-            option.style.borderColor = 'var(--color-border)';
+            option.style.borderColor = 'transparent';
             option.style.boxShadow = 'none';
         }
     });
 }
 
+/**
+ * Formate des millisecondes en "Xh YYm"
+ */
 function formatMsToHHm(ms) {
     if (!ms || ms <= 0) return '0h 00m';
     const totalMinutes = Math.floor(ms / 60000); 

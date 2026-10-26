@@ -5,7 +5,7 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-6">
             <div>
-                <h2 class="text-2xl font-bold">📬 Gestion des Demandes de Congés</h2>
+                <h2 class="text-2xl font-bold">Gestion des Demandes de Congés</h2>
                 <p style="color: var(--color-text-muted);">Approuvez ou refusez les demandes de congé de votre équipe.</p>
             </div>
             <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">

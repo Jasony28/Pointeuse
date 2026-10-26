@@ -10,7 +10,7 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-6">
             <div>
-                <h2 class="text-2xl font-bold">📅 Congés de l'Équipe</h2>
+                <h2 class="text-2xl font-bold">Congés de l'Équipe</h2>
                 <p style="color: var(--color-text-muted);">Consultez les congés de l'équipe et soumettez vos propres demandes.</p>
             </div>
             

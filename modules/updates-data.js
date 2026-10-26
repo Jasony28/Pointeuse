@@ -1,5 +1,19 @@
 export const updatesLog = [
     {
+        version: 'v2.0.0',
+        date: '26 octobre 2026',
+        changes: [
+            "**Nouvelle interface** : l'application a été entièrement redessinée, pensée d'abord pour le téléphone. Toutes vos fonctions sont toujours là.",
+            "**Barre d'onglets en bas** : Planning, Chantiers, Historique, Congés, et « Plus » pour le reste du menu.",
+            "**Nouvelle animation au démarrage** et nouvelle icône de l'application.",
+            "**Profils** : nouvel écran « Qui pointe aujourd'hui ? ». Le profil actif s'affiche en bas du menu, et le bouton « Changer de profil » est en haut des Paramètres.",
+            "**Pointage** : minuteur repensé avec statut « en cours » ou « en pause », heure de démarrage et gros boutons Pause / Arrêter.",
+            "**Mode sombre** : dans les Paramètres, choisissez Clair, Sombre ou Automatique, et votre couleur préférée.",
+            "**Infos chantiers** : vos chantiers de la semaine apparaissent en premier, avec une recherche et des codes d'accès copiables d'un appui.",
+            "**Mises à jour plus simples** : quand une nouvelle version sort, une fenêtre « Nouvelle version disponible » s'affiche. Appuyez sur « Mettre à jour ».",
+        ]
+    },
+    {
         version: 'v1.1.0',
         date: '13 août 2026',
         changes: [

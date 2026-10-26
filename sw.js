@@ -1,18 +1,19 @@
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/6.5.4/workbox-sw.js');
 
 const { precaching, routing, strategies, core } = workbox;
-// On change le nom du cache pour éviter les conflits avec l'ancienne entreprise
-core.setCacheNameDetails({ prefix: 'pointeuse-ldpr-cache' });
+core.setCacheNameDetails({ prefix: 'pointeuse-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v1.1.0'; 
+const APP_VERSION = 'v2.0.0'; // <--- À changer à chaque nouvelle version (avec app.js)
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
     { url: 'index.html', revision: APP_VERSION },
     { url: 'app.js', revision: APP_VERSION },
+    { url: 'splash.js', revision: APP_VERSION },
+    { url: 'styles/app.css', revision: APP_VERSION },
     { url: 'manifest.json', revision: APP_VERSION },
-    
+
     // Modules principaux
     { url: 'modules/utils.js', revision: APP_VERSION },
     { url: 'modules/data-service.js', revision: APP_VERSION },
@@ -25,10 +26,9 @@ precaching.precacheAndRoute([
     { url: 'modules/user-history.js', revision: APP_VERSION },
     { url: 'modules/user-leave.js', revision: APP_VERSION },
     { url: 'modules/user-stats.js', revision: APP_VERSION },
-    { url: 'modules/user-chat.js', revision: APP_VERSION }, 
+    { url: 'modules/user-chat.js', revision: APP_VERSION },
 
     // Modules Admin
-    { url: 'modules/admin-site-requests.js', revision: APP_VERSION },
     { url: 'modules/admin-chantiers.js', revision: APP_VERSION },
     { url: 'modules/admin-chantier-details.js', revision: APP_VERSION },
     { url: 'modules/admin-contracts.js', revision: APP_VERSION },
@@ -40,10 +40,12 @@ precaching.precacheAndRoute([
     { url: 'modules/admin-team.js', revision: APP_VERSION },
     { url: 'modules/admin-travel-report.js', revision: APP_VERSION },
     { url: 'modules/admin-live-view.js', revision: APP_VERSION },
-    
+    { url: 'modules/admin-site-requests.js', revision: APP_VERSION },
+
     // Ressources statiques
-    { url: 'icons/icon-192x192.png', revision: null },
-    { url: 'icons/icon-512x512.png', revision: null },
+    { url: 'icons/pointeuse-192.png', revision: APP_VERSION },
+    { url: 'icons/pointeuse-180.png', revision: APP_VERSION },
+    { url: 'icons/pointeuse-512.png', revision: APP_VERSION },
 ]);
 
 // Stratégie pour les pages HTML
@@ -60,14 +62,22 @@ routing.registerRoute(
     })
 );
 
-// Stratégie pour les autres ressources CDN
+// Bibliothèques externes (Firebase, Tailwind, Chart.js, PDF…) : gardées sur le téléphone pour démarrer sans réseau
+const LIB_HOSTS = ['www.gstatic.com', 'cdn.tailwindcss.com', 'cdn.jsdelivr.net', 'unpkg.com', 'storage.googleapis.com', 'cdnjs.cloudflare.com'];
 routing.registerRoute(
-    ({ request }) => ['script', 'style'].includes(request.destination) && request.url.includes('cdn'),
+    ({ url }) => LIB_HOSTS.includes(url.hostname),
     new strategies.StaleWhileRevalidate({ cacheName: 'cdn-assets' })
 );
 
-self.addEventListener('install', () => {
-    self.skipWaiting();
+// Fichiers de l'appli non listés plus haut (autres modules, images) : gardés après la première visite
+routing.registerRoute(
+    ({ url, request }) => url.origin === self.location.origin && ['script', 'style', 'image'].includes(request.destination),
+    new strategies.StaleWhileRevalidate({ cacheName: 'app-files' })
+);
+
+// La nouvelle version attend que l'utilisateur appuie sur « Mettre à jour » (pop-up dans app.js)
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
