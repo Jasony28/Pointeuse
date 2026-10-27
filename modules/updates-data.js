@@ -3,7 +3,7 @@ export const updatesLog = [
         version: 'v2.0.4',
         date: '27 octobre 2026',
         changes: [
-            "**Ouverture plus rapide** : l'application s'ouvre sans attendre le serveur, et l'animation de démarrage s'arrête dès que tout est prêt.",
+            "**Ouverture plus rapide** : l'application s'ouvre sans attendre le serveur.",
             "Les messages (modifications de planning, nouveautés) s'affichent juste après l'ouverture au lieu de la retarder.",
             "Les outils PDF et graphiques ne sont plus chargés à chaque ouverture, seulement quand vous en avez besoin.",
         ]

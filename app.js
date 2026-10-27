@@ -431,8 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clearTimeout(slowTimer);
         slowTimer = setTimeout(() => { if (loaderText) loaderText.textContent = 'Connexion lente… on continue d\'essayer'; }, 6000);
     };
-    // L'animation de démarrage (splash.js) se retire dès que l'appli est prête
-    const hideLoader = () => { clearTimeout(slowTimer); loader.style.display = 'none'; window.dispatchEvent(new Event('app-ready')); };
+    const hideLoader = () => { clearTimeout(slowTimer); loader.style.display = 'none'; };
 
     onAuthStateChanged(auth, async (user) => {
         authContainer.style.display = 'none';
