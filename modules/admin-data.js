@@ -1,6 +1,6 @@
 import { collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, showInfoModal } from "../app.js";
-import { getWeekDateRange } from "./utils.js";
+import { db, pageContent, showInfoModal, applyChartDefaults } from "../app.js";
+import { getWeekDateRange, loadLibrary } from "./utils.js";
 
 let chantierChart = null;
 let userChart = null;
@@ -188,6 +188,8 @@ async function loadDataForPeriod(period) {
 
         currentStats = stats;
         updateKPIs(stats);
+        await loadLibrary('chart');
+        applyChartDefaults();
         updateCharts(stats);
         displayProfitabilityList(stats);
     } catch (error) {
@@ -289,11 +291,12 @@ function displayProfitabilityList(stats) {
     });
 }
 
-function exportToPDF() {
+async function exportToPDF() {
     if (pointagesCache.length === 0) {
         showInfoModal("Information", "Aucune donnée à exporter pour la période sélectionnée.");
         return;
     }
+    try { await loadLibrary('pdf'); } catch (error) { showInfoModal("Erreur", "La librairie PDF n'a pas pu être chargée."); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     

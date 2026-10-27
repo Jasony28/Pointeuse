@@ -1,6 +1,6 @@
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, orderBy, serverTimestamp, updateDoc, setDoc, getDoc, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, currentUser, showConfirmationModal, showInfoModal } from "../app.js";
-import { getWeekDateRange } from "./utils.js";
+import { getWeekDateRange, loadLibrary } from "./utils.js";
 import { getActiveChantiers, getUsers } from "./data-service.js";
 
 const state = {
@@ -138,6 +138,7 @@ async function generatePlanningPDF() {
         return;
     }
     
+    try { await loadLibrary('pdf'); } catch (error) { showInfoModal("Erreur", "La librairie PDF n'a pas pu être chargée."); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     

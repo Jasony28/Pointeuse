@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v2.0.3'; // <--- À changer à chaque nouvelle version (avec app.js)
+const APP_VERSION = 'v2.0.4'; // <--- À changer à chaque nouvelle version (avec app.js)
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },

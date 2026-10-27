@@ -1,10 +1,12 @@
 /* =========================================================
-   Pointeuse — animation de démarrage (10 s, touchez pour passer)
+   Pointeuse — animation de démarrage (se retire dès que l'appli est prête, touchez pour passer)
    Fichier autonome : il suffit de l'inclure dans index.html,
    juste après <body> :  <script src="./splash.js"></script>
    ========================================================= */
 (function () {
-  const DURATION = 10000; // 10 secondes
+  const DURATION = 10000; // au plus 10 secondes si l'appli tarde à être prête
+  const MIN_DURATION = 1200; // le temps d'apercevoir l'animation
+  const start = Date.now();
 
   // Une seule fois par ouverture de l'application (pas à chaque rechargement interne)
   try {
@@ -148,6 +150,8 @@
     setTimeout(() => { el.remove(); style.remove(); }, 750);
   }
   const autoClose = setTimeout(close, DURATION);
+  // L'appli prévient (app.js) dès qu'elle est affichable : on ne fait plus attendre l'utilisateur
+  window.addEventListener('app-ready', () => setTimeout(close, Math.max(0, MIN_DURATION - (Date.now() - start))), { once: true });
   el.addEventListener('pointerdown', close);
   el.addEventListener('keydown', close);
 
