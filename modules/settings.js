@@ -2,6 +2,7 @@ import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTh
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
+import { loadLibrary } from "./utils.js";
 
 const auth = getAuth();
 
@@ -561,6 +562,7 @@ async function exportUserHistoryToPDF() {
     if (!exportData) return; 
 
     const { groupedData, totalExportMs, totalExportKm } = exportData;
+    try { await loadLibrary('pdf'); } catch (error) { showInfoModal("Erreur", "La librairie PDF n'a pas pu être chargée."); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4');
     let currentY = 20; 

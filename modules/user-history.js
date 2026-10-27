@@ -1,6 +1,6 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, navigateTo } from "../app.js";
-import { getWeekDateRange, formatMilliseconds } from "./utils.js";
+import { getWeekDateRange, formatMilliseconds, loadLibrary } from "./utils.js";
 import { getUsers } from "./data-service.js";
 
 let currentWeekOffset = 0;
@@ -1236,7 +1236,7 @@ async function saveEntry(e) {
     }
 }
 
-function generateHistoryPDF() {
+async function generateHistoryPDF() {
     const dataForPdf = pointagesPourPdf.filter(p => p.endTime);
 
     if (dataForPdf.length === 0) {
@@ -1244,7 +1244,8 @@ function generateHistoryPDF() {
         return;
     }
 
-    const { jsPDF } = window.jspdf;
+    try { await loadLibrary('pdf'); } catch (error) { /* message ci-dessous */ }
+    const { jsPDF } = window.jspdf || {};
     if (!jsPDF || !jsPDF.API.autoTable) {
         showInfoModal("Erreur", "La librairie PDF n'a pas pu être chargée.");
         return;
