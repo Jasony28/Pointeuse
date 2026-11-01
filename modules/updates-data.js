@@ -1,5 +1,14 @@
 export const updatesLog = [
     {
+        version: 'v2.1.0',
+        date: '1er novembre 2026',
+        changes: [
+            "**Thèmes - 4 nouvelles ambiances** : Chat (chat roux le jour, chat noir sous la lune la nuit), Cyber (graphite et néon vert), Nuit Étoilée (ciel animé, étoiles filantes, verre dépoli) et Arcade 8-bit (coucher de soleil rétro, pixels, ombres dures).",
+            "**Thèmes de couleur** : chaque couleur a maintenant sa propre police de titres, ses arrondis, un halo de fond et un menu teinté.",
+            "**Paramètres → Thème** : chaque choix montre un aperçu de l'appli dans ses couleurs, rangé en « Couleurs » et « Ambiances ».",
+        ]
+    },
+    {
         version: 'v2.0.4',
         date: '27 octobre 2026',
         changes: [

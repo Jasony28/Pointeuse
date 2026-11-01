@@ -12,7 +12,14 @@
     sessionStorage.setItem('splashSeen', '1');
   } catch (e) { /* stockage indisponible : on joue l'animation quand même */ }
 
+  // Thème « Chat » choisi dans les Paramètres : le chat s'invite au démarrage
+  let catTheme = false;
+  try { catTheme = localStorage.getItem('appTheme') === 'chat'; } catch (e) { /* stockage indisponible */ }
+
   const css = `
+  #pt-splash .pt-cat{width:170px;max-width:46vw;margin:-10px 0 -18px;position:relative;z-index:1;
+    opacity:0;transform:translateY(24px);animation:ptCat 1.4s .4s cubic-bezier(.2,1.4,.4,1) forwards}
+  @keyframes ptCat{to{opacity:1;transform:none}}
   #pt-splash{position:fixed;inset:0;z-index:9999;overflow:hidden;cursor:pointer;
     background:radial-gradient(120% 90% at 50% 35%,#1e2a4a 0%,#0d1324 55%,#06080f 100%);
     color:#fff;font-family:'Inter',system-ui,sans-serif;-webkit-tap-highlight-color:transparent;
@@ -118,6 +125,7 @@
         <circle cx="75" cy="75" r="6" fill="#fff"/>
       </svg>
     </div>
+    ${catTheme ? '<img class="pt-cat" src="./themes/chat/chat-coucou-jour.svg" alt="">' : ''}
     <div class="pt-title">${title}</div>
     <div class="pt-sub">Vos heures, vos chantiers, vos trajets.</div>
     <div class="pt-msg"><b>Préparation de votre journée…</b></div>
@@ -134,7 +142,9 @@
   }
 
   // Messages qui défilent (avec la route : départ dépôt → chantiers → retour)
-  const msgs = ['Préparation de votre journée…', 'Départ du dépôt', 'En route vers les chantiers', 'Calcul des kilomètres', 'Retour au dépôt', "C'est parti !"];
+  const msgs = catTheme
+    ? ['Le chat se réveille…', 'Il s\'étire', 'Il file vers les chantiers', 'Il compte les kilomètres', 'Retour au panier', 'Miaou, c\'est parti !']
+    : ['Préparation de votre journée…', 'Départ du dépôt', 'En route vers les chantiers', 'Calcul des kilomètres', 'Retour au dépôt', "C'est parti !"];
   const msgEl = el.querySelector('.pt-msg');
   const timers = msgs.slice(1).map((m, i) => setTimeout(() => { msgEl.innerHTML = `<b>${m}</b>`; }, 1300 + i * 1800));
 

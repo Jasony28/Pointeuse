@@ -39,10 +39,12 @@
     --sidebar-width: 264px;
 
     /* Échelles */
-    --radius-sm: 6px;
-    --radius: 8px;
-    --radius-lg: 12px;
-    --radius-xl: 16px;
+    /* --radius-scale est posé par le thème : 0 = carré (Arcade), 1 = standard, 1.6 = très arrondi */
+    --radius-scale: 1;
+    --radius-sm: calc(6px * var(--radius-scale));
+    --radius: calc(8px * var(--radius-scale));
+    --radius-lg: calc(12px * var(--radius-scale));
+    --radius-xl: calc(16px * var(--radius-scale));
 
     --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
     --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
@@ -52,6 +54,8 @@
 
     --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-display: var(--font-sans); /* titres : chaque thème peut avoir sa propre police */
+    --color-on-primary: #fff;         /* texte posé sur la couleur principale */
 
     --ease: cubic-bezier(0.2, 0, 0, 1);
     --topbar-height: 64px;
@@ -124,7 +128,7 @@ body {
     white-space: nowrap;
 }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: var(--color-primary); color: #fff; box-shadow: var(--shadow-xs); }
+.btn-primary { background: var(--color-primary); color: var(--color-on-primary); box-shadow: var(--shadow-xs); }
 .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
 .btn-secondary {
     background: var(--color-surface);
@@ -888,10 +892,6 @@ body .fixed.inset-0.bg-black > div > h3:first-child {
     letter-spacing: -0.005em;
     color: var(--color-text-base);
 }
-#page-content .theme-option { background: var(--color-surface-2); border-radius: var(--radius-lg) !important; }
-#page-content .theme-option:hover { background: var(--color-surface-3); }
-#page-content .theme-option > div:first-child { width: 2.25rem; height: 2.25rem; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35); }
-#page-content .theme-option span { font-size: 0.75rem; text-align: center; }
 
 /* Indicateurs chiffrés (tableau de bord admin, statistiques) */
 #page-content .kpi-label {
@@ -1467,13 +1467,397 @@ html.dark body .dark\:bg-gray-900 { background-color: var(--color-surface); }
 html.dark body .dark\:border-gray-700,
 html.dark body .dark\:border-gray-600 { border-color: var(--color-border); }
 
-/* Thèmes "verre" (Maine Coon) */
+/* Thèmes "verre" (Chat, Nuit Étoilée) */
 html.glass .sidebar { background: color-mix(in srgb, var(--sidebar-bg) 82%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
 html.glass .topbar { background: transparent; }
 html.glass #page-content [style*="background-color: var(--color-surface)"] {
     backdrop-filter: var(--glass-blur, none);
     -webkit-backdrop-filter: var(--glass-blur, none);
 }
+
+/* Typographie des titres : chaque thème peut avoir sa propre police (--font-display) */
+#page-content h1, #page-content h2, #page-content h3,
+#page-content .settings-section-title,
+.breadcrumb-page, .brand-name, .auth-title,
+.tracker-chantier, .tracker-idle-title,
+.modal h3, body .fixed.inset-0.bg-black > div > h3 { font-family: var(--font-display); }
+
+/* Thèmes de couleur : halo de la couleur principale, menu teinté, boutons en relief */
+html[data-skin="color"] {
+    --sidebar-bg: color-mix(in srgb, var(--color-primary) 16%, #0a0e1a);
+    --sidebar-bg-2: color-mix(in srgb, var(--color-primary) 30%, #111827);
+    --sidebar-active-bg: color-mix(in srgb, var(--color-primary) 26%, transparent);
+}
+html[data-skin="color"] body {
+    background-image:
+        radial-gradient(1000px 520px at 100% -8%, color-mix(in srgb, var(--color-primary) 11%, transparent), transparent 70%),
+        radial-gradient(800px 480px at -12% 108%, color-mix(in srgb, var(--color-primary) 7%, transparent), transparent 70%);
+    background-attachment: fixed;
+}
+html.dark[data-skin="color"] body {
+    background-image:
+        radial-gradient(1000px 520px at 100% -8%, color-mix(in srgb, var(--color-primary) 18%, transparent), transparent 70%),
+        radial-gradient(800px 480px at -12% 108%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 70%);
+}
+html[data-skin="color"] .btn-primary,
+html[data-skin="color"] .tracker-btn-start {
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent);
+    box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--color-primary) 65%, transparent);
+}
+html[data-skin="color"] .topbar { border-bottom-color: color-mix(in srgb, var(--color-primary) 12%, var(--color-border)); }
+html[data-skin="color"] .nav-link.nav-active { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, transparent); }
+
+/* ---- Cyber : graphite, un seul accent vert électrique, lignes fines, aucune ombre ---- */
+html[data-skin="cyber"] {
+    --shadow-xs: none;
+    --shadow-sm: none;
+    --shadow-md: 0 0 0 1px var(--color-border);
+    --shadow-lg: 0 0 0 1px var(--color-border), 0 24px 48px -24px #000;
+    --shadow-xl: 0 0 0 1px var(--color-border-strong), 0 32px 64px -24px #000;
+    --cyber-glow: 0 0 18px rgba(34, 229, 132, 0.35);
+}
+html[data-skin="cyber"] body {
+    background-image:
+        radial-gradient(900px 480px at 50% -12%, rgba(34, 229, 132, 0.09), transparent 70%),
+        linear-gradient(rgba(34, 229, 132, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34, 229, 132, 0.035) 1px, transparent 1px);
+    background-size: auto, 32px 32px, 32px 32px;
+    background-attachment: fixed;
+}
+html[data-skin="cyber"] ::selection { background: var(--color-primary); color: var(--color-on-primary); }
+html[data-skin="cyber"] #page-content [style*="background-color: var(--color-surface)"]:not(button):not(input):not(select):not(textarea),
+html[data-skin="cyber"] #page-content .card,
+html[data-skin="cyber"] #page-content .settings-card {
+    border: 1px solid var(--color-border) !important;
+    transition: border-color 0.2s var(--ease);
+}
+html[data-skin="cyber"] #page-content [style*="background-color: var(--color-surface)"]:not(button):not(input):not(select):not(textarea):hover,
+html[data-skin="cyber"] #page-content .settings-card:hover { border-color: rgba(34, 229, 132, 0.35) !important; }
+html[data-skin="cyber"] #page-content h1,
+html[data-skin="cyber"] #page-content h2,
+html[data-skin="cyber"] #page-content h3,
+html[data-skin="cyber"] .breadcrumb-page { text-transform: uppercase; letter-spacing: 0.04em; }
+html[data-skin="cyber"] #page-content .settings-section-title { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.08em; }
+html[data-skin="cyber"] #page-content .settings-section-title::before { content: '// '; color: var(--color-primary); }
+html[data-skin="cyber"] .breadcrumb-page::after { content: '_'; margin-left: 2px; color: var(--color-primary); animation: cyber-blink 1s steps(1) infinite; }
+@keyframes cyber-blink { 50% { opacity: 0; } }
+html[data-skin="cyber"] .btn-primary,
+html[data-skin="cyber"] .tracker-btn-start,
+html[data-skin="cyber"] #page-content button[style*="background-color: var(--color-primary)"],
+html[data-skin="cyber"] #page-content button[style*="background-color: var(--color-primary)"] *,
+html[data-skin="cyber"] .site-badge.is-today,
+html[data-skin="cyber"] .route-num,
+html[data-skin="cyber"] #page-content .quick-periods button.is-active { color: var(--color-on-primary) !important; }
+html[data-skin="cyber"] .btn-primary:hover,
+html[data-skin="cyber"] .tracker-btn-start:hover { box-shadow: var(--cyber-glow); }
+html[data-skin="cyber"] .tracker-timer { color: var(--color-primary); text-shadow: 0 0 24px rgba(34, 229, 132, 0.45); }
+html[data-skin="cyber"] .brand-mark,
+html[data-skin="cyber"] .avatar {
+    background: transparent;
+    color: var(--color-primary);
+    box-shadow: inset 0 0 0 1px var(--color-primary), var(--cyber-glow);
+}
+html[data-skin="cyber"] .nav-link.nav-active { color: var(--color-primary); }
+html[data-skin="cyber"] .nav-link.nav-active svg,
+html[data-skin="cyber"] .nav-link.nav-active::before { color: var(--color-primary); background-color: var(--color-primary); }
+html[data-skin="cyber"] .nav-link.nav-active svg { background: none; }
+html[data-skin="cyber"] .nav-link.nav-active::before { box-shadow: var(--cyber-glow); }
+html[data-skin="cyber"] .sidebar { border-right-color: var(--color-border); }
+html[data-skin="cyber"] .input:focus,
+html[data-skin="cyber"] body .fixed.inset-0 input:focus,
+html[data-skin="cyber"] body .fixed.inset-0 select:focus,
+html[data-skin="cyber"] body .fixed.inset-0 textarea:focus { box-shadow: 0 0 0 1px var(--color-primary), var(--cyber-glow) !important; }
+
+/* ---- Nuit Étoilée : ciel profond, étoiles scintillantes, verre dépoli, reflets dorés ---- */
+html[data-skin="nuit"] { --star-gold: #ffd479; }
+html[data-skin="nuit"] body {
+    background-image:
+        radial-gradient(1200px 700px at 85% -10%, rgba(98, 70, 220, 0.38), transparent 60%),
+        radial-gradient(900px 600px at -10% 110%, rgba(30, 90, 210, 0.28), transparent 60%),
+        linear-gradient(180deg, #0a0f2c 0%, #05071a 100%);
+    background-attachment: fixed;
+}
+/* Deux couches d'étoiles décalées qui scintillent à des rythmes différents */
+html[data-skin="nuit"]::before,
+html[data-skin="nuit"] body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+}
+html[data-skin="nuit"]::before {
+    background-image:
+        radial-gradient(1px 1px at 20px 30px, #fff, transparent),
+        radial-gradient(1px 1px at 120px 80px, rgba(255, 255, 255, 0.8), transparent),
+        radial-gradient(1.5px 1.5px at 60px 150px, #fff, transparent),
+        radial-gradient(1px 1px at 170px 190px, rgba(255, 255, 255, 0.7), transparent),
+        radial-gradient(1px 1px at 90px 230px, #fff, transparent);
+    background-size: 240px 260px;
+    animation: nuit-twinkle 4s ease-in-out infinite alternate;
+}
+html[data-skin="nuit"] body::before {
+    background-image:
+        radial-gradient(1.5px 1.5px at 50px 60px, var(--star-gold), transparent),
+        radial-gradient(1px 1px at 260px 120px, #fff, transparent),
+        radial-gradient(2px 2px at 180px 300px, #fff, transparent),
+        radial-gradient(1px 1px at 330px 40px, rgba(255, 255, 255, 0.8), transparent),
+        radial-gradient(1.5px 1.5px at 30px 330px, rgba(200, 210, 255, 0.9), transparent);
+    background-size: 380px 400px;
+    animation: nuit-twinkle 6s ease-in-out 1.5s infinite alternate-reverse;
+}
+/* Étoile filante de temps en temps */
+html[data-skin="nuit"] body::after {
+    content: '';
+    position: fixed;
+    top: 12%;
+    left: 70%;
+    z-index: -1;
+    width: 140px;
+    height: 1.5px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.95), transparent);
+    transform: rotate(-24deg);
+    opacity: 0;
+    pointer-events: none;
+    animation: nuit-shooting 11s ease-in 3s infinite;
+}
+@keyframes nuit-twinkle { from { opacity: 0.35; } to { opacity: 1; } }
+@keyframes nuit-shooting {
+    0% { opacity: 0; transform: rotate(-24deg) translateX(0); }
+    2% { opacity: 1; }
+    9% { opacity: 0; transform: rotate(-24deg) translateX(-480px); }
+    100% { opacity: 0; transform: rotate(-24deg) translateX(-480px); }
+}
+html[data-skin="nuit"] .topbar { border-bottom-color: rgba(150, 165, 255, 0.1); }
+html[data-skin="nuit"] .sidebar { background: color-mix(in srgb, var(--sidebar-bg) 70%, transparent); }
+html[data-skin="nuit"] #page-content [style*="background-color: var(--color-surface)"]:not(button):not(input):not(select):not(textarea),
+html[data-skin="nuit"] #page-content .settings-card {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 18px 40px -18px rgba(0, 0, 0, 0.7);
+}
+html[data-skin="nuit"] .btn-primary,
+html[data-skin="nuit"] .tracker-btn-start,
+html[data-skin="nuit"] #page-content button[style*="background-color: var(--color-primary)"] {
+    background-image: linear-gradient(135deg, #6d7dff, #a35cff) !important;
+    box-shadow: 0 8px 24px -8px rgba(130, 110, 255, 0.7);
+}
+html[data-skin="nuit"] .tracker-timer {
+    background: linear-gradient(180deg, #fff 30%, var(--star-gold));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 18px rgba(255, 212, 121, 0.25));
+}
+html[data-skin="nuit"] #page-content .settings-section-title::before { content: '✦ '; color: var(--star-gold); }
+html[data-skin="nuit"] .brand-mark,
+html[data-skin="nuit"] .avatar { background: linear-gradient(135deg, #6d7dff, #a35cff); box-shadow: 0 0 16px rgba(130, 110, 255, 0.55); }
+html[data-skin="nuit"] .nav-link.nav-active::before { background: var(--star-gold); box-shadow: 0 0 10px var(--star-gold); }
+html[data-skin="nuit"] .nav-link.nav-active svg { color: var(--star-gold); }
+
+/* ---- Arcade 8-bit : coucher de soleil synthwave, grille qui défile, pixels et ombres dures ---- */
+html[data-skin="arcade"] {
+    --arcade-cyan: #00f0ff;
+    --arcade-yellow: #ffd23f;
+    --shadow-xs: 2px 2px 0 #000;
+    --shadow-sm: 4px 4px 0 rgba(0, 0, 0, 0.75);
+    --shadow-md: 4px 4px 0 #000;
+    --shadow-lg: 6px 6px 0 #000;
+    --shadow-xl: 8px 8px 0 #000;
+}
+html[data-skin="arcade"] body {
+    background-image: linear-gradient(180deg, #0d0221 0%, #1b0440 55%, #3a0a52 100%);
+    background-attachment: fixed;
+}
+/* Soleil rayé à l'horizon */
+html[data-skin="arcade"]::before {
+    content: '';
+    position: fixed;
+    left: 50%;
+    bottom: 34vh;
+    z-index: -1;
+    width: min(320px, 70vw);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    transform: translate(-50%, 50%);
+    background: linear-gradient(180deg, var(--arcade-yellow), #ff2e88 70%);
+    -webkit-mask-image: repeating-linear-gradient(180deg, #000 0 14px, transparent 14px 18px);
+    mask-image: linear-gradient(180deg, #000 45%, transparent 45%), repeating-linear-gradient(180deg, #000 0 10px, transparent 10px 15px);
+    opacity: 0.3;
+    pointer-events: none;
+}
+/* Sol en grille qui défile */
+html[data-skin="arcade"] body::before {
+    content: '';
+    position: fixed;
+    left: -50%;
+    right: -50%;
+    bottom: 0;
+    height: 34vh;
+    z-index: -1;
+    background-image:
+        linear-gradient(rgba(255, 46, 136, 0.7) 2px, transparent 2px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.45) 2px, transparent 2px);
+    background-size: 100% 36px, 64px 100%;
+    transform: perspective(260px) rotateX(58deg);
+    transform-origin: bottom;
+    -webkit-mask-image: linear-gradient(to top, #000 10%, transparent 95%);
+    mask-image: linear-gradient(to top, #000 10%, transparent 95%);
+    opacity: 0.35;
+    pointer-events: none;
+    animation: arcade-grid 1.4s linear infinite;
+}
+/* Lignes de balayage d'un vieil écran */
+html[data-skin="arcade"] body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px);
+    pointer-events: none;
+}
+@keyframes arcade-grid { to { background-position: 0 36px, 0 0; } }
+html[data-skin="arcade"] ::selection { background: var(--arcade-cyan); color: #000; }
+html[data-skin="arcade"] .topbar { border-bottom: 2px solid var(--color-border); }
+html[data-skin="arcade"] .sidebar { border-right: 2px solid var(--color-border); }
+html[data-skin="arcade"] #page-content [style*="background-color: var(--color-surface)"]:not(button):not(input):not(select):not(textarea),
+html[data-skin="arcade"] #page-content .card,
+html[data-skin="arcade"] #page-content .settings-card,
+html[data-skin="arcade"] body .fixed.inset-0.bg-black > div {
+    border: 2px solid var(--color-border) !important;
+    box-shadow: 4px 4px 0 #000 !important;
+}
+html[data-skin="arcade"] #page-content h1,
+html[data-skin="arcade"] #page-content h2 { text-shadow: 2px 2px 0 color-mix(in srgb, var(--color-primary) 70%, transparent); }
+/* Police pixel « Press Start » réservée aux petits éléments pour rester lisible */
+html[data-skin="arcade"] .brand-name,
+html[data-skin="arcade"] .breadcrumb-page,
+html[data-skin="arcade"] .nav-section-label,
+html[data-skin="arcade"] .tracker-status,
+html[data-skin="arcade"] #page-content .settings-section-title {
+    font-family: var(--font-pixel);
+    font-size: 0.625rem;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
+    font-weight: 400;
+}
+html[data-skin="arcade"] #page-content .settings-section-title { color: var(--arcade-cyan); }
+html[data-skin="arcade"] #page-content .settings-section-title::before { content: '▶ '; color: var(--color-primary); }
+html[data-skin="arcade"] .tracker-timer {
+    font-family: var(--font-pixel);
+    font-size: clamp(1.75rem, 8.5vw, 2.75rem);
+    font-weight: 400;
+    color: var(--arcade-yellow);
+    text-shadow: 3px 3px 0 #ff2e88, 0 0 20px rgba(255, 210, 63, 0.4);
+}
+html[data-skin="arcade"] .tracker-dot { border-radius: 0; animation: cyber-blink 0.8s steps(1) infinite !important; }
+html[data-skin="arcade"] .btn,
+html[data-skin="arcade"] .tracker-btn,
+html[data-skin="arcade"] #page-content button[style*="background-color: var(--color-primary)"] {
+    font-family: var(--font-display);
+    border: 2px solid #000;
+    box-shadow: 4px 4px 0 #000;
+}
+html[data-skin="arcade"] .btn:active:not(:disabled),
+html[data-skin="arcade"] .tracker-btn:active,
+html[data-skin="arcade"] #page-content button[style*="background-color: var(--color-primary)"]:active:not(:disabled) {
+    transform: translate(4px, 4px);
+    box-shadow: none;
+}
+html[data-skin="arcade"] .brand-mark,
+html[data-skin="arcade"] .avatar { border-radius: 0; background: var(--color-primary); box-shadow: 3px 3px 0 var(--arcade-cyan); }
+html[data-skin="arcade"] .nav-link.nav-active { color: var(--arcade-cyan); }
+html[data-skin="arcade"] .nav-link.nav-active svg { color: var(--arcade-cyan); }
+html[data-skin="arcade"] .nav-link.nav-active::before { width: 4px; border-radius: 0; background: var(--arcade-cyan); }
+html[data-skin="arcade"] .input,
+html[data-skin="arcade"] body .fixed.inset-0 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+html[data-skin="arcade"] body .fixed.inset-0 select,
+html[data-skin="arcade"] body .fixed.inset-0 textarea { border-width: 2px; }
+html[data-skin="arcade"] .input:focus,
+html[data-skin="arcade"] body .fixed.inset-0 input:focus,
+html[data-skin="arcade"] body .fixed.inset-0 select:focus,
+html[data-skin="arcade"] body .fixed.inset-0 textarea:focus { box-shadow: 4px 4px 0 var(--arcade-cyan) !important; }
+
+/* Animations de décor coupées si le téléphone demande moins de mouvement */
+@media (prefers-reduced-motion: reduce) {
+    html[data-skin]::before,
+    html[data-skin] body::before,
+    html[data-skin] body::after,
+    html[data-skin="cyber"] .breadcrumb-page::after { animation: none !important; }
+}
+@media print {
+    html[data-skin]::before,
+    html[data-skin] body::before,
+    html[data-skin] body::after { display: none; }
+}
+
+/* Sélecteur de thèmes (Paramètres) : chaque choix montre une mini-appli dans son ambiance */
+#page-content .theme-group-label {
+    margin: 1.25rem 0 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+#page-content .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 0.75rem; }
+#page-content .theme-option {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem 0.5rem 0.625rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-2);
+    color: var(--color-text-base);
+    text-align: left;
+    cursor: pointer;
+}
+#page-content .theme-option:hover { border-color: var(--color-border-strong); transform: translateY(-2px); }
+#page-content .theme-option.is-selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-ring); }
+.theme-mini {
+    display: flex;
+    height: 74px;
+    overflow: hidden;
+    border-radius: calc(4px + 6px * var(--tm-r));
+    background: var(--tm-bg);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.tm-side { width: 22%; background: var(--tm-side, color-mix(in srgb, var(--tm-primary) 16%, #0a0e1a)); }
+.tm-side::before { content: ''; display: block; width: 50%; height: 4px; margin: 10px auto 0; border-radius: 2px; background: var(--tm-primary); }
+.tm-body { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 8px; min-width: 0; }
+.tm-bar { width: 55%; height: 6px; border-radius: calc(3px * var(--tm-r)); background: var(--tm-text); opacity: 0.7; }
+.tm-card {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    padding: 6px;
+    border: 1px solid var(--tm-border);
+    border-radius: calc(5px * var(--tm-r));
+    background: var(--tm-surface);
+}
+.tm-btn { width: 48%; height: 9px; border-radius: calc(3px * var(--tm-r)); background: var(--tm-primary); }
+.theme-option-name { padding: 0 0.25rem; font-family: var(--tm-font); font-size: 0.8125rem; font-weight: 650; line-height: 1.2; }
+.theme-option-tagline { padding: 0 0.25rem; font-size: 0.6875rem; line-height: 1.3; color: var(--color-text-muted); }
+.theme-check {
+    position: absolute;
+    top: 0.875rem;
+    right: 0.875rem;
+    display: none;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    box-shadow: 0 0 0 2px var(--color-surface);
+}
+.theme-check svg { width: 12px; height: 12px; }
+#page-content .theme-option.is-selected .theme-check { display: grid; }
+#page-content .mode-hint { margin: 0.25rem 0 0; font-size: 0.75rem; color: var(--color-text-muted); }
+#page-content .mode-hint[hidden] { display: none; }
+#page-content #mode-selector.is-locked { opacity: 0.5; }
+
 
 /* 12. Mobile (usage principal), responsive & impression ------------------- */
 
@@ -2243,3 +2627,188 @@ html.glass #page-content [style*="background-color: var(--color-surface)"] {
 .leave-card-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--color-border); }
 .leave-card-actions .btn { min-height: 34px; padding: 0.375rem 0.875rem; }
 .leave-card-actions .icon-btn { margin-left: auto; }
+
+/* ==========================================================================
+   Thème « Chat » (Paramètres → Thème → Chat) : html.cat, illustrations dans themes/chat
+   Jour : chat roux, tons crème et caramel. Nuit : chat noir aux yeux dorés sous la lune.
+   ========================================================================== */
+html.cat {
+    --sidebar-bg: #3B2416;
+    --sidebar-bg-2: #4A2F1D;
+    --sidebar-active-bg: rgba(255, 220, 180, 0.12);
+    --cat-paw: url("../themes/chat/patte.svg");
+    accent-color: var(--color-primary);
+    scrollbar-color: color-mix(in srgb, var(--color-primary) 45%, transparent) transparent;
+}
+html.cat.dark {
+    --sidebar-bg: #10111A;
+    --sidebar-bg-2: #1A1B28;
+    --sidebar-active-bg: rgba(180, 170, 255, 0.12);
+}
+
+/* Fond : motif d'empreintes, pelote et grand chat assis (fixes, derrière les cartes en verre) */
+html.cat body {
+    background-color: var(--color-background);
+    background-image:
+        url("../themes/chat/chat-assis-jour.svg"),
+        url("../themes/chat/pelote-jour.svg"),
+        url("../themes/chat/motif-pattes-jour.svg"),
+        radial-gradient(120% 80% at 100% 100%, #F8D9B6 0%, transparent 60%);
+    background-repeat: no-repeat, no-repeat, repeat, no-repeat;
+    background-size: auto min(48vh, 440px), auto min(13vh, 120px), 220px 220px, 100% 100%;
+    background-position: right 2vw bottom 1.5vh, right calc(2vw + min(48vh, 440px) * 0.8) bottom 2vh, 0 0, 0 0;
+    background-attachment: fixed;
+}
+html.cat.dark body {
+    background-image:
+        url("../themes/chat/chat-assis-nuit.svg"),
+        url("../themes/chat/pelote-nuit.svg"),
+        radial-gradient(circle at 86% 14%, #F4E9C8 0 38px, transparent 39px),
+        radial-gradient(circle at 86% 14%, rgba(244, 233, 200, 0.28) 0, transparent 120px),
+        url("../themes/chat/etoiles.svg"),
+        url("../themes/chat/motif-pattes-nuit.svg"),
+        linear-gradient(180deg, #1B1C2E 0%, #14151F 70%);
+    background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat, no-repeat;
+    background-size: auto min(48vh, 440px), auto min(13vh, 120px), 100% 100%, 100% 100%, 260px 260px, 220px 220px, 100% 100%;
+    background-position: right 2vw bottom 1.5vh, right calc(2vw + min(48vh, 440px) * 0.8) bottom 2vh, 0 0, 0 0, 0 0, 0 0, 0 0;
+    background-attachment: fixed;
+}
+/* Sur ordinateur, le chat s'assoit à droite du contenu ; sur téléphone, au-dessus de la barre d'onglets */
+@media (max-width: 1023px) {
+    html.cat body, html.cat.dark body {
+        background-size: auto min(30vh, 260px), auto min(9vh, 80px), 220px 220px, 100% 100%;
+        background-position: right 2vw bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 6px), right calc(2vw + min(30vh, 260px) * 0.78) bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 8px), 0 0, 0 0;
+    }
+    html.cat.dark body {
+        background-size: auto min(30vh, 260px), auto min(9vh, 80px), 100% 100%, 100% 100%, 260px 260px, 220px 220px, 100% 100%;
+        background-position: right 2vw bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 6px), right calc(2vw + min(30vh, 260px) * 0.78) bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 8px), 0 0, 0 0, 0 0, 0 0, 0 0;
+    }
+}
+
+/* Cartes en verre (le chat se devine derrière) */
+html.cat #page-content [style*="background-color: var(--color-surface)"],
+html.cat .history-day, html.cat .team-card, html.cat .site-card, html.cat .leave-card, html.cat .hours-kpi,
+html.cat .schedule-day, html.cat .team-stat, html.cat .request-card {
+    background-color: var(--color-surface);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-radius: 18px;
+}
+html.cat .topbar { background: color-mix(in srgb, var(--color-background) 70%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+
+/* Logo : oreilles de chat */
+html.cat .brand-mark { position: relative; border-radius: 12px; background: linear-gradient(135deg, #E9965A, #B45F25); }
+html.cat.dark .brand-mark { background: linear-gradient(135deg, #8E7BEA, #4B3FA0); }
+html.cat .brand-mark::before, html.cat .brand-mark::after {
+    content: ""; position: absolute; top: -7px; width: 12px; height: 12px;
+    background: inherit; clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+html.cat .brand-mark::before { left: 3px; transform: rotate(-12deg); }
+html.cat .brand-mark::after { right: 3px; transform: rotate(12deg); }
+
+/* Avatars : oreilles de chat */
+html.cat .avatar { position: relative; overflow: visible; }
+html.cat .avatar::before, html.cat .avatar::after {
+    content: ""; position: absolute; top: -5px; width: 40%; height: 40%;
+    background: inherit; clip-path: polygon(50% 0, 100% 100%, 0 100%); z-index: -1;
+}
+html.cat .avatar::before { left: 2%; transform: rotate(-18deg); }
+html.cat .avatar::after { right: 2%; transform: rotate(18deg); }
+html.cat .avatar { isolation: isolate; }
+
+/* Navigation : empreinte de patte sur la page active */
+html.cat .nav-link.nav-active::after {
+    content: ""; margin-left: auto; width: 14px; height: 14px; flex-shrink: 0;
+    background: #F2B27A; -webkit-mask: var(--cat-paw) center / contain no-repeat; mask: var(--cat-paw) center / contain no-repeat;
+}
+html.cat.dark .nav-link.nav-active::after { background: #F6C445; }
+html.cat .bottom-nav-item { position: relative; }
+html.cat .bottom-nav-item.is-active::after {
+    content: ""; position: absolute; top: 3px; right: calc(50% - 22px); width: 11px; height: 11px;
+    background: var(--color-primary); -webkit-mask: var(--cat-paw) center / contain no-repeat; mask: var(--cat-paw) center / contain no-repeat;
+    transform: rotate(18deg); animation: cat-pop 0.35s cubic-bezier(.2, 1.6, .4, 1);
+}
+@keyframes cat-pop { from { transform: rotate(18deg) scale(0); } }
+
+/* Chrono de pointage : un chat passe la tête au-dessus de la carte */
+html.cat #live-tracker-container { position: relative; overflow: visible; margin-top: 84px; border-radius: 22px; }
+html.cat #live-tracker-container::before {
+    content: ""; position: absolute; left: 50%; top: -88px; width: 176px; height: 101px; transform: translateX(-50%);
+    background: url("../themes/chat/chat-coucou-jour.svg") center bottom / contain no-repeat; pointer-events: none;
+}
+html.cat.dark #live-tracker-container::before { background-image: url("../themes/chat/chat-coucou-nuit.svg"); }
+html.cat .tracker-btn { border-radius: 999px; }
+html.cat .tracker-btn-start { box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--color-primary) 80%, transparent); }
+html.cat .tracker-btn-start::before {
+    content: ""; display: inline-block; width: 18px; height: 18px; margin-right: 0.5rem; vertical-align: -3px;
+    background: currentColor; -webkit-mask: var(--cat-paw) center / contain no-repeat; mask: var(--cat-paw) center / contain no-repeat;
+}
+html.cat .tracker.is-running .tracker-dot { animation: cat-purr 1.2s ease-in-out infinite; }
+@keyframes cat-purr { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.6); } }
+
+/* Boutons : arrondis comme des coussinets, petit « appui de patte » */
+html.cat .btn { border-radius: 999px; }
+html.cat .btn-primary { box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--color-primary) 85%, transparent); }
+html.cat .btn:active:not(:disabled), html.cat .tracker-btn:active:not(:disabled) { transform: scale(0.96); }
+
+/* Chargement : une patte qui trottine au lieu de la roue */
+html.cat .spinner {
+    width: 34px; height: 34px; border: 0; border-radius: 0;
+    background: var(--color-primary); -webkit-mask: var(--cat-paw) center / contain no-repeat; mask: var(--cat-paw) center / contain no-repeat;
+    animation: cat-trot 0.9s ease-in-out infinite;
+}
+@keyframes cat-trot {
+    0% { transform: translate(-14px, 0) rotate(-14deg); opacity: .5; }
+    50% { transform: translate(0, -8px) rotate(0); opacity: 1; }
+    100% { transform: translate(14px, 0) rotate(14deg); opacity: .5; }
+}
+
+/* Listes vides : un chat qui fait la sieste */
+html.cat .hours-empty::before, html.cat .schedule-day-empty::before {
+    content: ""; display: block; margin: 0 auto 0.5rem; width: 150px; height: 98px;
+    background: url("../themes/chat/chat-dodo-jour.svg") center / contain no-repeat;
+}
+html.cat.dark .hours-empty::before, html.cat.dark .schedule-day-empty::before { background-image: url("../themes/chat/chat-dodo-nuit.svg"); }
+html.cat .schedule-day-empty::before { width: 64px; height: 42px; }
+
+/* Jour du planning et de l'historique : empreinte sur aujourd'hui */
+html.cat .schedule-day.is-today, html.cat .history-day.is-today { position: relative; }
+html.cat .schedule-day.is-today::after, html.cat .history-day.is-today::after {
+    content: ""; position: absolute; bottom: 8px; right: 10px; width: 16px; height: 16px; opacity: .55;
+    background: var(--color-primary); -webkit-mask: var(--cat-paw) center / contain no-repeat; mask: var(--cat-paw) center / contain no-repeat;
+    transform: rotate(20deg);
+}
+
+/* Fenêtres : oreilles de chat sur le haut du panneau (sur ordinateur, où le panneau est centré) */
+@media (min-width: 640px) {
+    html.cat .modal-panel { position: relative; border-radius: 22px; }
+    html.cat .modal-panel::before, html.cat .modal-panel::after {
+        content: ""; position: absolute; top: -18px; width: 34px; height: 26px;
+        background: var(--color-surface); clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    }
+    html.cat .modal-panel::before { left: 28px; transform: rotate(-10deg); }
+    html.cat .modal-panel::after { right: 28px; transform: rotate(10deg); }
+    html.cat .modal-panel { background: color-mix(in srgb, var(--color-surface) 100%, var(--color-background)); }
+}
+
+/* Notifications : une patte devant le message */
+html.cat .toast { border-radius: 999px; }
+html.cat .toast::before {
+    content: ""; width: 16px; height: 16px; flex-shrink: 0;
+    background: #F2B27A; -webkit-mask: var(--cat-paw) center / contain no-repeat; mask: var(--cat-paw) center / contain no-repeat;
+}
+
+/* Titres de page : une petite empreinte */
+html.cat #page-content h2.text-2xl::after, html.cat #page-content h1.text-2xl::after {
+    content: ""; display: inline-block; width: 0.75em; height: 0.75em; margin-left: 0.4em; vertical-align: 0;
+    background: var(--color-primary); opacity: .7; transform: rotate(20deg);
+    -webkit-mask: var(--cat-paw) center / contain no-repeat; mask: var(--cat-paw) center / contain no-repeat;
+}
+
+/* Sélection de texte et barres de défilement aux couleurs du chat */
+html.cat ::selection { background: color-mix(in srgb, var(--color-primary) 30%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+    html.cat .spinner, html.cat .tracker.is-running .tracker-dot, html.cat .bottom-nav-item.is-active::after { animation: none; }
+}
+html.cat .toast > svg { display: none; }
