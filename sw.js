@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v2.1.0'; // <--- À changer à chaque nouvelle version (avec app.js)
+const APP_VERSION = 'v2.2.0'; // <--- À changer à chaque nouvelle version (avec app.js)
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -27,6 +27,11 @@ precaching.precacheAndRoute([
     { url: 'themes/chat/patte.svg', revision: APP_VERSION },
     { url: 'themes/chat/pelote-jour.svg', revision: APP_VERSION },
     { url: 'themes/chat/pelote-nuit.svg', revision: APP_VERSION },
+    { url: 'themes/motocross/moto.svg', revision: APP_VERSION },
+    { url: 'themes/motocross/piste.svg', revision: APP_VERSION },
+    { url: 'themes/motocross/drapeau.svg', revision: APP_VERSION },
+    { url: 'themes/motocross/boue.svg', revision: APP_VERSION },
+    { url: 'themes/motocross/traces.svg', revision: APP_VERSION },
 
     // Modules principaux
     { url: 'modules/utils.js', revision: APP_VERSION },

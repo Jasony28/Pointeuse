@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v2.2.0',
+        date: '15 novembre 2026',
+        changes: [
+            "**Nouveau thème Motocross Yamaha** : bleu racing, damier d'arrivée, piste de terre, traces de pneus et éclaboussures de boue. Une YZ450F n° 1 saute à travers l'écran, puis repasse en roue arrière avec un concurrent à ses trousses, et le panneau de stand donne les écarts. À choisir dans Paramètres → Thème.",
+        ]
+    },
+    {
         version: 'v2.1.0',
         date: '1er novembre 2026',
         changes: [

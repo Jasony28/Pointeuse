@@ -1,6 +1,6 @@
 import { updatesLog } from './modules/updates-data.js';
 
-const APP_VERSION = 'v2.1.0';
+const APP_VERSION = 'v2.2.0';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -154,6 +154,32 @@ export const themes = {
             '--font-pixel': "'Press Start 2P', monospace",
             '--radius-scale': '0',
         }
+    },
+    // Thème « Motocross Yamaha » : YZ450F bleue (illustrations dans themes/motocross), sauts, course et panneau de stand
+    motocross: {
+        name: 'Motocross Yamaha',
+        tagline: 'YZ450F, bleu racing, terre et damier',
+        preview: '#2f6bff',
+        group: 'ambiance',
+        skin: 'motocross',
+        decor: 'motocross',
+        dark: true,
+        fonts: ['Russo+One'],
+        previewBackground: `url("${asset('./themes/motocross/moto.svg')}") 62% 34% / 74% no-repeat, url("${asset('./themes/motocross/piste.svg')}") bottom / 220% no-repeat, radial-gradient(90% 70% at 80% 0%, rgba(47, 107, 255, 0.55), transparent 70%), linear-gradient(180deg, #081033, #050a1f)`,
+        colors: {
+            '--color-primary': '#2f6bff',
+            '--color-primary-hover': '#5b8cff',
+            '--color-background': '#050a1f',
+            '--color-surface': '#0c1638',
+            '--color-text-base': '#eef3ff',
+            '--color-text-muted': '#93a4d1',
+            '--color-border': '#1c2b63',
+            '--sidebar-bg': '#040817',
+            '--sidebar-bg-2': '#132260',
+            '--sidebar-active-bg': 'rgba(47, 107, 255, 0.2)',
+            '--font-display': "'Russo One', sans-serif",
+            '--radius-scale': '0.7',
+        }
     }
 };
 
@@ -175,6 +201,37 @@ function loadThemeFonts(fonts = []) {
 // Page Paramètres : charge d'un coup les polices de tous les thèmes pour les aperçus
 export function preloadThemeFonts() {
     loadThemeFonts(Object.values(themes).flatMap(theme => theme.fonts || []));
+}
+
+// Décors animés posés devant l'appli (ils passent même devant les données, sans jamais capter le toucher)
+const decors = {
+    motocross: () => `
+        <img class="decor-mx-jump" src="${asset('./themes/motocross/moto.svg')}" alt="">
+        <img class="decor-mx-ride" src="${asset('./themes/motocross/moto.svg')}" alt="">
+        <img class="decor-mx-ride decor-mx-rival" src="${asset('./themes/motocross/moto.svg')}" alt="">
+        <div class="decor-mx-board"><span class="decor-mx-board-text">${pitBoardMessage()}</span></div>`,
+};
+
+// Panneau de stand : un nouveau message à chaque apparition
+const pitBoardMessages = ['P1 · YAMAHA', 'GAZ !', 'HOLESHOT !', '+2.4 s', 'YZ450F N° 1', 'DERNIER TOUR'];
+let pitBoardIndex = 0;
+const pitBoardMessage = () => pitBoardMessages[pitBoardIndex++ % pitBoardMessages.length];
+
+function applyDecor(name) {
+    const current = document.getElementById('theme-decor');
+    if (current?.dataset.decor === name) return;
+    current?.remove();
+    if (!name || !decors[name]) return;
+    const layer = document.createElement('div');
+    layer.id = 'theme-decor';
+    layer.className = `theme-decor decor-${name}`;
+    layer.dataset.decor = name;
+    layer.setAttribute('aria-hidden', 'true');
+    layer.innerHTML = decors[name]();
+    layer.querySelector('.decor-mx-board')?.addEventListener('animationiteration', () => {
+        layer.querySelector('.decor-mx-board-text').textContent = pitBoardMessage();
+    });
+    document.body.appendChild(layer);
 }
 
 // Mode clair / sombre, indépendant de la couleur choisie ('light' | 'dark' | 'auto' = réglage du téléphone)
@@ -217,6 +274,7 @@ export function applyTheme(themeName) {
     root.classList.toggle('cat', !!theme.cat);
     if (theme.skin) root.dataset.skin = theme.skin;
     else delete root.dataset.skin;
+    applyDecor(theme.decor);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors['--color-background'] || '#0f172a');
 
     applyChartDefaults();
