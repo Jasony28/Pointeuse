@@ -2,6 +2,7 @@ import { collection, query, orderBy, getDocs, addDoc, updateDoc, doc, serverTime
 import { db, pageContent, showInfoModal, showConfirmationModal, showToast } from "../app.js";
 import { getGoogleMapsUrl } from "./utils.js";
 import { getActiveChantiers } from "./data-service.js";
+import { exportChantiersPdf } from "./chantiers-pdf.js";
 
 // Token Mapbox
 const MAPBOX_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
@@ -43,10 +44,16 @@ export async function render() {
                     <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">Gestion des Chantiers & Contraintes</h2>
                     <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Adresses, durées, horaires imposés et codes d'accès de chaque chantier.</p>
                 </div>
-                <button id="openAddChantierBtn" class="btn btn-primary">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="pointer-events: none;"><path d="M12 5v14M5 12h14"/></svg>
-                    Nouveau chantier
-                </button>
+                <div class="flex flex-wrap gap-2">
+                    <button id="exportChantiersPdfBtn" class="btn btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 12v6M9 15l3 3 3-3"/></svg>
+                        Exporter en PDF
+                    </button>
+                    <button id="openAddChantierBtn" class="btn btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="pointer-events: none;"><path d="M12 5v14M5 12h14"/></svg>
+                        Nouveau chantier
+                    </button>
+                </div>
             </div>
 
             <div class="hours-toolbar">
@@ -446,8 +453,23 @@ async function saveChantier(e) {
     }
 }
 
+async function exportPdf() {
+    const btn = document.getElementById('exportChantiersPdfBtn');
+    if (!chantiersCache.length) return showInfoModal("Information", "Aucun chantier à exporter.");
+    btn.disabled = true;
+    try {
+        await exportChantiersPdf(chantiersCache);
+    } catch (e) {
+        console.error("Export PDF des chantiers:", e);
+        showInfoModal("Erreur", "Le PDF n'a pas pu être créé. Vérifiez la connexion internet et réessayez.");
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 function setupEventListeners() {
     document.getElementById('openAddChantierBtn').onclick = () => openChantierForm(null);
+    document.getElementById('exportChantiersPdfBtn').onclick = exportPdf;
     document.getElementById('chantierForm').onsubmit = saveChantier;
     document.getElementById('cancelChantierFormBtn').onclick = closeChantierForm;
     document.getElementById('closeDetailsBtn').onclick = () => document.getElementById('detailsModal').classList.add('hidden');

@@ -1,0 +1,189 @@
+rules_version = '2';
+// Règles Firestore COMPLÈTES de la Pointeuse (projet pointeuse-ldpr), sur le modèle de la Pointeuse LPF,
+// adaptées aux comptes partagés par plusieurs profils.
+// À coller dans la console Firebase → Firestore Database → Règles (remplace tout), puis « Publier ».
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() { return request.auth != null; }
+    function isAdmin() {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function isOwner(userId) { return isAuthenticated() && request.auth.uid == userId; }
+    // Compte validé par l'admin (un compte créé librement reste « pending » ; « banned » = plus aucun accès)
+    function isApproved() {
+      return isAuthenticated() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    // 1. LECTURE GÉNÉRALE : comptes validés seulement. Les collections de la liste ont leurs propres règles
+    //    (sinon cette règle, qui s'additionne aux autres, laisserait lire les messages ou les pleins des autres).
+    match /{collection}/{document=**} {
+      allow read: if isApproved() && !(collection in ['chats', 'users', 'retoursClients', 'pleins', 'pleinsPhotos', 'appointments', 'errorLogs']);
+    }
+
+    // 2. COMPTES : impossible de changer soi-même son rôle, son statut, sa visibilité ou ses heures de contrat.
+    //    Le compte peut gérer ses profils, leurs codes, la version vue, son nom et son e-mail.
+    match /users/{userId} {
+      // Sa propre fiche reste lisible en attente de validation (écran « compte en attente »)
+      allow read: if isOwner(userId) || isApproved();
+      allow create: if isOwner(userId)
+                    && request.resource.data.role == 'user'
+                    && request.resource.data.status == 'pending';
+      allow update: if isAdmin() || (isOwner(userId)
+                    && request.resource.data.get('role', null) == resource.data.get('role', null)
+                    && request.resource.data.get('status', null) == resource.data.get('status', null)
+                    && request.resource.data.get('visibility', null) == resource.data.get('visibility', null)
+                    && request.resource.data.get('contractHours', null) == resource.data.get('contractHours', null)
+                    && request.resource.data.get('superAdmin', null) == resource.data.get('superAdmin', null));
+      allow delete: if isAdmin();
+    }
+
+    // 3. MESSAGERIE : discussions à deux et groupes, réservées à leurs membres.
+    //    Seuls les admins d'un groupe changent ses membres ; chacun peut le quitter.
+    match /chats/{chatId} {
+      function members() { return resource.data.participants; }
+      function sameMembers() {
+        return request.resource.data.participants == resource.data.participants
+            && request.resource.data.get('admins', []) == resource.data.get('admins', [])
+            && request.resource.data.get('name', null) == resource.data.get('name', null);
+      }
+      function groupAdmin() { return request.auth.uid in resource.data.get('admins', []); }
+      // Quitter : seul soi-même disparaît des membres (et des admins), personne n'est ajouté
+      function leaving() {
+        return resource.data.get('type', 'direct') == 'group'
+            && resource.data.participants.toSet().difference(request.resource.data.participants.toSet()) == [request.auth.uid].toSet()
+            && request.resource.data.participants.toSet().difference(resource.data.participants.toSet()).size() == 0
+            && request.resource.data.get('admins', []).toSet().difference(resource.data.get('admins', []).toSet()).size() == 0;
+      }
+      allow read: if isApproved() && request.auth.uid in members();
+      allow create: if isApproved() && request.auth.uid in request.resource.data.participants
+                    && (request.resource.data.get('type', 'direct') != 'group'
+                        || (request.resource.data.createdBy == request.auth.uid && request.resource.data.admins == [request.auth.uid]));
+      allow update: if isApproved() && request.auth.uid in members() && (sameMembers() || groupAdmin() || leaving());
+
+      match /messages/{messageId} {
+        function chatMember() {
+          return request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        }
+        allow read: if isApproved() && chatMember();
+        allow create: if isApproved() && chatMember() && request.resource.data.senderId == request.auth.uid;
+        // Modifier ou supprimer : l'auteur seulement ; réagir (👍…) : tout membre
+        allow update: if isApproved() && chatMember() && (
+                         (resource.data.senderId == request.auth.uid && request.resource.data.senderId == request.auth.uid)
+                      || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']));
+      }
+    }
+
+    // 4. POINTAGES : lisibles par les comptes validés (règle 1, pour la suggestion « tu étais avec lui ? »
+    //    qui cherche le nom du profil dans « colleagues ») ; chacun crée et modifie uniquement les siens.
+    match /pointages/{docId} {
+      allow create: if isAdmin() || (isApproved() && request.resource.data.uid == request.auth.uid);
+      allow update: if isAdmin() || (isApproved()
+                    && resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == request.auth.uid);
+      allow delete: if isAdmin();
+      // Journal des modifications : lu par l'admin ; écrit par l'admin ou le propriétaire du pointage
+      match /auditLog/{logId} {
+        allow read, update, delete: if isAdmin();
+        allow create: if isAdmin() || (isApproved()
+                      && get(/databases/$(database)/documents/pointages/$(docId)).data.uid == request.auth.uid);
+      }
+    }
+
+    // 4b. TRAJETS : chacun crée, recalcule et supprime uniquement les siens
+    match /trajets/{docId} {
+      allow create: if isAdmin() || (isApproved() && request.resource.data.id_utilisateur == request.auth.uid);
+      allow update: if isAdmin() || (isApproved()
+                    && resource.data.id_utilisateur == request.auth.uid
+                    && request.resource.data.id_utilisateur == request.auth.uid);
+      allow delete: if isAdmin() || (isApproved() && resource.data.id_utilisateur == request.auth.uid);
+    }
+
+    // 5. CONGÉS : le compte demande (au nom du profil actif) et peut annuler sa demande ; l'admin décide
+    match /leaveRequests/{requestId} {
+      allow create: if isAdmin() || (isApproved()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 'pending');
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (isApproved() && resource.data.userId == request.auth.uid);
+    }
+
+    // 6. PLANNING : l'admin gère tout ; l'employé qui annule son congé retire les jours de congé liés
+    match /planning/{docId} {
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin() || (isApproved()
+                    && resource.data.get('id_leaveRequest', '') != ''
+                    && get(/databases/$(database)/documents/leaveRequests/$(resource.data.id_leaveRequest)).data.userId == request.auth.uid);
+    }
+
+    // 7. SUIVI DES ERREURS : chacun envoie les siennes, l'admin les lit et les efface
+    match /errorLogs/{logId} {
+      allow read, delete: if isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // 8. ADMINISTRATION : écriture réservée à l'admin (lecture : règle 1)
+    match /chantiers/{docId} { allow write: if isAdmin(); }
+    match /chantierUpdates/{docId} { allow write: if isAdmin(); }
+    match /publishedSchedules/{docId} { allow write: if isAdmin(); }
+    match /colleagues/{docId} { allow write: if isAdmin(); }
+    match /notifications/{docId} { allow write: if isAdmin(); }
+    match /counters/{docId} { allow write: if isAdmin(); }
+
+    // 9. DEMANDES DU SITE PUBLIC (page admin « Demandes site ») : le site les envoie, l'admin les lit et les traite.
+    //    Le site peut écrire sans compte : seule une nouvelle demande « en_attente » est acceptée.
+    match /appointments/{rdvId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if request.resource.data.get('status', '') == 'en_attente'
+                    && request.resource.data.size() <= 30;
+    }
+
+    // 10. RETOURS CLIENTS : l'admin crée, annule et supprime ; chaque compte lit seulement les siens
+    //     (l'appli n'affiche ensuite que ceux du profil actif). L'employé peut seulement marquer « lu » (une fois)
+    //     puis répondre (une fois, 1000 caractères au plus).
+    match /retoursClients/{retourId} {
+      function own() { return isApproved() && resource.data.uid == request.auth.uid && resource.data.get('cancelled', false) == false; }
+      function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      allow read: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (own() && (
+                       (changed().hasOnly(['readAt'])
+                        && resource.data.get('readAt', null) == null
+                        && request.resource.data.readAt == request.time)
+                    || (changed().hasOnly(['reply', 'replyAt'])
+                        && resource.data.get('readAt', null) != null
+                        && resource.data.get('reply', '') == ''
+                        && request.resource.data.reply is string
+                        && request.resource.data.reply.size() > 0
+                        && request.resource.data.reply.size() <= 1000
+                        && request.resource.data.replyAt == request.time)));
+    }
+
+    // 11. PLEINS DE CARBURANT : chacun lit et supprime seulement les siens, l'admin lit et supprime tout.
+    //     Un plein noté ne se modifie pas (on le supprime et on le refait). La photo est à part (même identifiant).
+    match /pleins/{pleinId} {
+      allow read: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
+      allow create: if isApproved()
+                    && request.resource.data.keys().hasOnly(['uid', 'userName', 'date', 'litres', 'montant', 'plaque', 'createdAt'])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.date is string && request.resource.data.date.size() == 10
+                    && request.resource.data.litres is number && request.resource.data.litres > 0 && request.resource.data.litres <= 500
+                    && request.resource.data.montant is number && request.resource.data.montant > 0 && request.resource.data.montant <= 2000
+                    && request.resource.data.plaque is string && request.resource.data.plaque.size() >= 4 && request.resource.data.plaque.size() <= 12
+                    && request.resource.data.createdAt == request.time;
+      allow delete: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
+    }
+    match /pleinsPhotos/{pleinId} {
+      allow read: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
+      allow create: if isApproved()
+                    && request.resource.data.keys().hasOnly(['uid', 'photo', 'createdAt'])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.photo is string
+                    && request.resource.data.photo.matches('^data:image/jpeg;base64,.*');
+      allow delete: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
+    }
+  }
+}

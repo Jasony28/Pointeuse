@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v2.2.0'; // <--- À changer à chaque nouvelle version (avec app.js)
+const APP_VERSION = 'v2.4.0'; // <--- À changer à chaque nouvelle version (avec app.js)
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -27,6 +27,18 @@ precaching.precacheAndRoute([
     { url: 'themes/chat/patte.svg', revision: APP_VERSION },
     { url: 'themes/chat/pelote-jour.svg', revision: APP_VERSION },
     { url: 'themes/chat/pelote-nuit.svg', revision: APP_VERSION },
+    { url: 'themes/noel/traineau.svg', revision: APP_VERSION },
+    { url: 'themes/noel/lutin-cadeau.svg', revision: APP_VERSION },
+    { url: 'themes/noel/lutin-sucre-orge.svg', revision: APP_VERSION },
+    { url: 'themes/noel/pere-noel-coucou.svg', revision: APP_VERSION },
+    { url: 'themes/noel/guirlande.svg', revision: APP_VERSION },
+    { url: 'themes/noel/paysage.svg', revision: APP_VERSION },
+    { url: 'themes/noel/bonnet.svg', revision: APP_VERSION },
+    { url: 'themes/noel/houx.svg', revision: APP_VERSION },
+    { url: 'themes/noel/noeud.svg', revision: APP_VERSION },
+    { url: 'themes/noel/boules.svg', revision: APP_VERSION },
+    { url: 'themes/noel/cadeau-parachute.svg', revision: APP_VERSION },
+    { url: 'themes/noel/lutins-banniere.svg', revision: APP_VERSION },
     { url: 'themes/motocross/moto.svg', revision: APP_VERSION },
     { url: 'themes/motocross/piste.svg', revision: APP_VERSION },
     { url: 'themes/motocross/drapeau.svg', revision: APP_VERSION },
@@ -39,6 +51,12 @@ precaching.precacheAndRoute([
     { url: 'modules/updates-data.js', revision: APP_VERSION },
     { url: 'modules/settings.js', revision: APP_VERSION },
     { url: 'modules/chantiers.js', revision: APP_VERSION },
+    { url: 'modules/libs.js', revision: APP_VERSION },
+    { url: 'modules/pdf-kit.js', revision: APP_VERSION },
+    { url: 'modules/native-files.js', revision: APP_VERSION },
+    { url: 'modules/html-utils.js', revision: APP_VERSION },
+    { url: 'modules/retours-clients.js', revision: APP_VERSION },
+    { url: 'modules/chantiers-pdf.js', revision: APP_VERSION },
 
     // Modules Utilisateur
     { url: 'modules/user-dashboard.js', revision: APP_VERSION },
@@ -46,6 +64,10 @@ precaching.precacheAndRoute([
     { url: 'modules/user-leave.js', revision: APP_VERSION },
     { url: 'modules/user-stats.js', revision: APP_VERSION },
     { url: 'modules/user-chat.js', revision: APP_VERSION },
+    { url: 'modules/user-retours.js', revision: APP_VERSION },
+    { url: 'modules/user-fuel.js', revision: APP_VERSION },
+    { url: 'modules/pleins.js', revision: APP_VERSION },
+    { url: 'modules/fuel-cost.js', revision: APP_VERSION },
 
     // Modules Admin
     { url: 'modules/admin-chantiers.js', revision: APP_VERSION },
@@ -61,6 +83,7 @@ precaching.precacheAndRoute([
     { url: 'modules/admin-live-view.js', revision: APP_VERSION },
     { url: 'modules/admin-site-requests.js', revision: APP_VERSION },
     { url: 'modules/admin-errors.js', revision: APP_VERSION },
+    { url: 'modules/admin-retours.js', revision: APP_VERSION },
 
     // Ressources statiques
     { url: 'icons/pointeuse-192.png', revision: APP_VERSION },
@@ -95,7 +118,10 @@ routing.registerRoute(
     new strategies.StaleWhileRevalidate({ cacheName: 'app-files' })
 );
 
-// La nouvelle version attend que l'utilisateur appuie sur « Mettre à jour » (pop-up dans app.js)
+// Nouvelle version : activée dès qu'elle est téléchargée, sans rien demander. Les téléphones qui ont encore
+// l'ancien bandeau « Mettre à jour / Plus tard » ne le voient pas : il n'a pas le temps de s'afficher.
+self.addEventListener('install', () => self.skipWaiting());
+
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
