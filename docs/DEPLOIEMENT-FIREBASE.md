@@ -5,14 +5,11 @@ l'étape 3 nettoie seulement les vieilles photos.
 
 ## 1. Règles Firestore (console, 5 minutes)
 
-Console Firebase → **Firestore Database** → **Règles**.
+Console Firebase → **Firestore Database** → **Règles** : **remplacer** tout le texte par le contenu de
+`docs/firestore.rules`, puis **Publier** (ou en ligne de commande : `firebase deploy --only firestore:rules`).
 
-Ouvrir `docs/firestore-ajouts.rules` et **ajouter** son contenu à l'intérieur de
-`match /databases/{database}/documents { … }`, sans effacer les règles déjà en place, puis **Publier**.
-
-Sans ces règles :
-- la page **Carburant** ne peut pas enregistrer les pleins ;
-- les **Retours clients** ne peuvent pas être envoyés ni lus.
+Avant de publier, garder une copie des règles actuelles (onglet « Règles » → tout copier dans un fichier) :
+en cas de souci, on recolle l'ancienne version. L'onglet « Règles » a aussi un historique des versions.
 
 ## 2. Photos avant / après (Firebase Storage)
 
@@ -41,5 +38,5 @@ La fonction `cleanupOldPhotos` tourne le 2 de chaque mois à 4 h (heure de Paris
   Cloud Functions ; à faire plus tard si besoin.
 - **Planification automatique**, **fiches équipe / super admin**, corrections d'adresses des chantiers LPF,
   recalcul des km : propres à la Pointeuse LPF ou non demandés.
-- **Pointages privés** (un employé ne lit plus que ses pointages) : la règle doit être adaptée aux profils
-  partagés et testée avant d'être activée (voir la fin de `docs/firestore-ajouts.rules`).
+- **Pointages privés** (un employé ne lit plus que ses pointages) : non activés, car la suggestion « tu étais
+  avec lui ? » cherche le nom du profil chez les autres comptes.
