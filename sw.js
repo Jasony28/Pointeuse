@@ -27,6 +27,18 @@ precaching.precacheAndRoute([
     { url: 'themes/chat/patte.svg', revision: APP_VERSION },
     { url: 'themes/chat/pelote-jour.svg', revision: APP_VERSION },
     { url: 'themes/chat/pelote-nuit.svg', revision: APP_VERSION },
+    { url: 'themes/noel/traineau.svg', revision: APP_VERSION },
+    { url: 'themes/noel/lutin-cadeau.svg', revision: APP_VERSION },
+    { url: 'themes/noel/lutin-sucre-orge.svg', revision: APP_VERSION },
+    { url: 'themes/noel/pere-noel-coucou.svg', revision: APP_VERSION },
+    { url: 'themes/noel/guirlande.svg', revision: APP_VERSION },
+    { url: 'themes/noel/paysage.svg', revision: APP_VERSION },
+    { url: 'themes/noel/bonnet.svg', revision: APP_VERSION },
+    { url: 'themes/noel/houx.svg', revision: APP_VERSION },
+    { url: 'themes/noel/noeud.svg', revision: APP_VERSION },
+    { url: 'themes/noel/boules.svg', revision: APP_VERSION },
+    { url: 'themes/noel/cadeau-parachute.svg', revision: APP_VERSION },
+    { url: 'themes/noel/lutins-banniere.svg', revision: APP_VERSION },
     { url: 'themes/motocross/moto.svg', revision: APP_VERSION },
     { url: 'themes/motocross/piste.svg', revision: APP_VERSION },
     { url: 'themes/motocross/drapeau.svg', revision: APP_VERSION },
@@ -98,7 +110,10 @@ routing.registerRoute(
     new strategies.StaleWhileRevalidate({ cacheName: 'app-files' })
 );
 
-// La nouvelle version attend que l'utilisateur appuie sur « Mettre à jour » (pop-up dans app.js)
+// Nouvelle version : activée dès qu'elle est téléchargée, sans rien demander. Les téléphones qui ont encore
+// l'ancien bandeau « Mettre à jour / Plus tard » ne le voient pas : il n'a pas le temps de s'afficher.
+self.addEventListener('install', () => self.skipWaiting());
+
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });

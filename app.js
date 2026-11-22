@@ -159,6 +159,107 @@ export const themes = {
             '--radius-scale': '0',
         }
     },
+    carnet: {
+        name: 'Carnet',
+        tagline: 'Papier quadrillé, encre bleue',
+        preview: '#2449a8',
+        group: 'ambiance',
+        skin: 'carnet',
+        fonts: ['Kalam:wght@400;700'],
+        previewBackground: 'linear-gradient(90deg, transparent 14px, rgba(220, 60, 60, 0.45) 14px, rgba(220, 60, 60, 0.45) 15px, transparent 15px), linear-gradient(rgba(70, 110, 190, 0.18) 1px, transparent 1px) 0 0 / 8px 8px, linear-gradient(90deg, rgba(70, 110, 190, 0.18) 1px, transparent 1px) 0 0 / 8px 8px, #fbf8ef',
+        colors: {
+            '--color-primary': '#2449a8',
+            '--color-primary-hover': '#1b3887',
+            '--color-background': '#fbf8ef',
+            '--color-surface': '#fffdf6',
+            '--color-text-base': '#1d2742',
+            '--color-text-muted': '#6b6a62',
+            '--color-border': '#e2dac4',
+            '--sidebar-bg': '#1d2742',
+            '--sidebar-bg-2': '#2c3a5e',
+            '--sidebar-active-bg': 'rgba(255, 255, 255, 0.1)',
+            '--font-display': "'Kalam', cursive",
+            '--radius-scale': '0.6',
+        }
+    },
+    aurore: {
+        name: 'Aurore boréale',
+        tagline: 'Voiles verts et violets',
+        preview: '#3ee6b0',
+        group: 'ambiance',
+        skin: 'aurore',
+        dark: true,
+        glass: true,
+        fonts: ['Outfit:wght@400;500;600;700'],
+        previewBackground: 'radial-gradient(60% 40% at 30% 30%, rgba(62, 230, 176, 0.55), transparent 70%), radial-gradient(50% 40% at 75% 25%, rgba(150, 90, 255, 0.5), transparent 70%), linear-gradient(180deg, #071526, #03070f)',
+        colors: {
+            '--color-primary': '#3ee6b0',
+            '--color-primary-hover': '#72f2c9',
+            '--color-on-primary': '#03140e',
+            '--color-background': '#03070f',
+            '--color-surface': 'rgba(14, 26, 44, 0.6)',
+            '--color-text-base': '#e8f4f2',
+            '--color-text-muted': '#8fa9b8',
+            '--color-border': 'rgba(120, 220, 200, 0.14)',
+            '--sidebar-bg': '#040a16',
+            '--sidebar-bg-2': '#10213a',
+            '--sidebar-active-bg': 'rgba(62, 230, 176, 0.12)',
+            '--glass-blur': 'blur(16px)',
+            '--font-sans': "'Outfit', 'Inter', sans-serif",
+            '--font-display': "'Outfit', sans-serif",
+            '--radius-scale': '1.4',
+        }
+    },
+    sakura: {
+        name: 'Sakura',
+        tagline: 'Rose pâle, pétales qui tombent',
+        preview: '#d6457a',
+        group: 'ambiance',
+        skin: 'sakura',
+        fonts: ['Zen+Maru+Gothic:wght@500;700'],
+        previewBackground: 'radial-gradient(4px 2.5px at 20% 30%, #f4a6c0, transparent), radial-gradient(4px 2.5px at 70% 55%, #f7b9cd, transparent), radial-gradient(3px 2px at 45% 80%, #f4a6c0, transparent), radial-gradient(90% 60% at 100% 0%, #ffd9e5, transparent 70%), #fff6f8',
+        colors: {
+            '--color-primary': '#c73a6d',
+            '--color-primary-hover': '#a82d5a',
+            '--color-background': '#fff6f8',
+            '--color-surface': 'rgba(255, 255, 255, 0.86)',
+            '--color-text-base': '#3d1f2b',
+            '--color-text-muted': '#8f6676',
+            '--color-border': '#f3d9e2',
+            '--sidebar-bg': '#4a2234',
+            '--sidebar-bg-2': '#6b3249',
+            '--sidebar-active-bg': 'rgba(255, 190, 215, 0.16)',
+            '--font-display': "'Zen Maru Gothic', sans-serif",
+            '--radius-scale': '1.5',
+        }
+    },
+    // Thème « Esprit de Noël » (clé « hiver » gardée) : illustrations dans themes/noel, traîneau et lutins qui traversent l'écran
+    hiver: {
+        name: 'Esprit de Noël',
+        tagline: 'Père Noël, lutins et neige',
+        preview: '#d93848',
+        group: 'ambiance',
+        skin: 'hiver',
+        decor: 'noel',
+        dark: true,
+        fonts: ['Fredoka:wght@500;600;700'],
+        previewBackground: `url("${asset('./themes/noel/traineau.svg')}") 50% 30% / 92% no-repeat, url("${asset('./themes/noel/paysage.svg')}") bottom / 160% no-repeat, radial-gradient(1.5px 1.5px at 15% 20%, #fff, transparent), radial-gradient(2px 2px at 60% 75%, #fff, transparent), radial-gradient(1.5px 1.5px at 85% 15%, #fff, transparent), linear-gradient(180deg, #0c2340, #12395f)`,
+        colors: {
+            '--color-primary': '#d93848',
+            '--color-primary-hover': '#ec5462',
+            '--color-background': '#0a1d33',
+            '--color-surface': '#10294a',
+            '--color-text-base': '#f1f6fc',
+            '--color-text-muted': '#9db3cc',
+            '--color-border': '#1d3c62',
+            '--color-success': '#3cc47c',
+            '--sidebar-bg': '#071629',
+            '--sidebar-bg-2': '#123257',
+            '--sidebar-active-bg': 'rgba(60, 196, 124, 0.14)',
+            '--font-display': "'Fredoka', sans-serif",
+            '--radius-scale': '1.2',
+        }
+    },
     // Thème « Motocross Yamaha » : YZ450F bleue (illustrations dans themes/motocross), sauts, course et panneau de stand
     motocross: {
         name: 'Motocross Yamaha',
@@ -209,12 +310,32 @@ export function preloadThemeFonts() {
 
 // Décors animés posés devant l'appli (ils passent même devant les données, sans jamais capter le toucher)
 const decors = {
+    noel: () => `
+        <img class="decor-baubles" src="${asset('./themes/noel/boules.svg')}" alt="">
+        <img class="decor-sleigh" src="${asset('./themes/noel/traineau.svg')}" alt="">
+        <img class="decor-parachute" src="${asset('./themes/noel/cadeau-parachute.svg')}" alt="">
+        <img class="decor-elf decor-elf-gift" src="${asset('./themes/noel/lutin-cadeau.svg')}" alt="">
+        <img class="decor-elf decor-elf-cane" src="${asset('./themes/noel/lutin-sucre-orge.svg')}" alt="">
+        <img class="decor-banner" src="${asset('./themes/noel/lutins-banniere.svg')}" alt="">
+        <div class="decor-santa-peek"><span class="decor-sign">${christmasCountdown()}</span><img src="${asset('./themes/noel/pere-noel-coucou.svg')}" alt=""></div>`,
     motocross: () => `
         <img class="decor-mx-jump" src="${asset('./themes/motocross/moto.svg')}" alt="">
         <img class="decor-mx-ride" src="${asset('./themes/motocross/moto.svg')}" alt="">
         <img class="decor-mx-ride decor-mx-rival" src="${asset('./themes/motocross/moto.svg')}" alt="">
         <div class="decor-mx-board"><span class="decor-mx-board-text">${pitBoardMessage()}</span></div>`,
 };
+
+// Pancarte du Père Noël : « J-12 avant Noël », remise à jour à chaque apparition
+function christmasCountdown(now = new Date()) {
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let christmas = new Date(now.getFullYear(), 11, 25);
+    if (today > christmas && now.getMonth() === 11) return 'Joyeuses fêtes ! ✨';
+    if (today > christmas) christmas = new Date(now.getFullYear() + 1, 11, 25);
+    const days = Math.round((christmas - today) / 86400000);
+    if (days === 0) return 'Joyeux Noël ! 🎁';
+    if (days === 1) return "C'est ce soir ! 🎅";
+    return `J-${days} avant Noël 🎄`;
+}
 
 // Panneau de stand : un nouveau message à chaque apparition
 const pitBoardMessages = ['P1 · YAMAHA', 'GAZ !', 'HOLESHOT !', '+2.4 s', 'YZ450F N° 1', 'DERNIER TOUR'];
@@ -232,6 +353,9 @@ function applyDecor(name) {
     layer.dataset.decor = name;
     layer.setAttribute('aria-hidden', 'true');
     layer.innerHTML = decors[name]();
+    layer.querySelector('.decor-santa-peek')?.addEventListener('animationiteration', () => {
+        layer.querySelector('.decor-sign').textContent = christmasCountdown();
+    });
     layer.querySelector('.decor-mx-board')?.addEventListener('animationiteration', () => {
         layer.querySelector('.decor-mx-board-text').textContent = pitBoardMessage();
     });
@@ -479,8 +603,33 @@ function getPageName(pageId) {
     return tab ? tab.name : (extraPageNames[pageId] || '');
 }
 
+// Nouvelle version installée pendant que l'appli est ouverte : les fichiers déjà chargés sont anciens,
+// ceux de la prochaine page seraient nouveaux. Pour ne jamais mélanger deux versions (page qui plante),
+// le prochain changement de page recharge l'appli directement sur la page demandée (même profil).
+let navigationCount = 0;
+let newVersionReady = false;
+const RESUME_PAGE_KEY = 'resumePage';
+const MODULE_MISMATCH = /does not provide an export named|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i;
+
+function reloadInto(pageId, params) {
+    try { sessionStorage.setItem(RESUME_PAGE_KEY, JSON.stringify({ pageId, params, at: Date.now() })); } catch { /* stockage indisponible : on recharge sur l'accueil */ }
+    window.location.reload();
+}
+
+// Après un tel rechargement : la page demandée (2 minutes au plus), sinon null
+function takeResumePage() {
+    try {
+        const saved = JSON.parse(sessionStorage.getItem(RESUME_PAGE_KEY) || 'null');
+        sessionStorage.removeItem(RESUME_PAGE_KEY);
+        if (!saved?.pageId || Date.now() - saved.at > 2 * 60 * 1000 || !/^[a-z-]+$/.test(saved.pageId)) return null;
+        if (saved.pageId.startsWith('admin-') && !isAdmin) return null;
+        return saved;
+    } catch { return null; }
+}
+
 export async function navigateTo(pageId, params = {}) {
     if (pageId === 'user-details') pageId = 'user-history';
+    if (newVersionReady) { reloadInto(pageId, params); return; }
     currentPageId = pageId;
 
     document.querySelectorAll('#main-nav-list a').forEach(link => {
@@ -505,18 +654,35 @@ export async function navigateTo(pageId, params = {}) {
     document.title = pageName ? `${pageName} · Pointeuse` : 'Pointeuse';
 
     pageContent.classList.add('page-exit');
+    // Le fichier de la page se télécharge pendant l'animation de sortie (et non après)
+    const modulePromise = import(`./modules/${pageId}.js`);
+    modulePromise.catch(() => {}); // l'erreur est affichée plus bas
+    const navigation = ++navigationCount;
 
     setTimeout(async () => {
+        if (navigation !== navigationCount) return; // un autre onglet a été touché entre-temps
         pageContent.innerHTML = `<div class="page-loader"><div class="spinner" role="status" aria-label="Chargement"></div></div>`;
         window.scrollTo(0, 0);
 
         try {
             // La page quittée arrête ses écouteurs temps réel / minuteurs (si elle en a)
             try { currentPageModule?.cleanup?.(); } catch (cleanupError) { console.error(cleanupError); }
-            const pageModule = await import(`./modules/${pageId}.js`);
+            currentPageModule = null;
+            const pageModule = await modulePromise;
+            if (navigation !== navigationCount) return;
             currentPageModule = pageModule;
             await pageModule.render(params);
         } catch (error) {
+            // Fichiers de deux versions mélangés (mise à jour pendant que l'appli était ouverte) : un rechargement
+            // remet tout à la même version. Une seule fois par minute, pour ne jamais boucler.
+            let lastHeal = 0;
+            try { lastHeal = Number(sessionStorage.getItem('moduleHealAt')) || 0; } catch { /* rien */ }
+            if (MODULE_MISMATCH.test(String(error?.message)) && Date.now() - lastHeal > 60 * 1000) {
+                try { sessionStorage.setItem('moduleHealAt', String(Date.now())); } catch { /* rien */ }
+                console.warn(`Page ${pageId} : fichiers de versions différentes, rechargement.`, error?.message);
+                reloadInto(pageId, params);
+                return;
+            }
             console.error(`Erreur module ${pageId}:`, error);
             let errorMsg = "Impossible de charger la page.";
             if (error.message.includes('404')) errorMsg = "Le fichier du module est introuvable.";
@@ -693,7 +859,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             appContainer.style.display = 'block';
                             if (savedProfile) {
                                 showActiveProfile(savedProfile);
-                                navigateTo('user-dashboard');
+                                // Rechargement après une mise à jour : on revient sur la page qui était demandée
+                                const resume = takeResumePage();
+                                if (resume?.pageId.startsWith('admin-') && isMasqueradingAsUser) { isMasqueradingAsUser = false; setupNavigation(); }
+                                navigateTo(resume ? resume.pageId : 'user-dashboard', resume?.params || {});
                                 offerProfilePin(savedProfile);
                             } else {
                                 renderProfileSelection(userData);
@@ -795,40 +964,35 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if ('serviceWorker' in navigator && !isNativeApp) {
         import('https://storage.googleapis.com/workbox-cdn/releases/6.5.4/workbox-window.prod.mjs').then(({ Workbox }) => {
             const wb = new Workbox('./sw.js');
-            const showUpdateToast = () => {
-                let toast = document.getElementById('update-toast');
-                if (toast) return;
-                toast = document.createElement('div');
-                toast.id = 'update-toast';
-                toast.setAttribute('role', 'status');
-                toast.innerHTML = `
-                    <img src="./icons/pointeuse-192.png" alt="" class="update-toast-icon">
-                    <div class="update-toast-text">
-                        <strong>Nouvelle version disponible</strong>
-                        <span>Mettez à jour pour profiter des dernières nouveautés.</span>
-                    </div>
-                    <div class="update-toast-actions">
-                        <button id="later-button" class="btn btn-secondary">Plus tard</button>
-                        <button id="reload-button" class="btn btn-primary">Mettre à jour</button>
-                    </div>
-                `;
-                document.body.appendChild(toast);
-                document.getElementById('reload-button').onclick = (e) => {
-                    e.currentTarget.disabled = true;
-                    e.currentTarget.textContent = 'Mise à jour…';
-                    wb.messageSkipWaiting();
-                };
-                document.getElementById('later-button').onclick = () => {
-                    toast.classList.remove('show');
-                    setTimeout(() => toast.remove(), 400);
-                };
-                setTimeout(() => toast.classList.add('show'), 100);
+            // Nouvelle version : elle s'installe et s'active toute seule (sw.js), sans rien demander.
+            // La page se recharge ensuite pour l'utiliser, à un moment où ça ne dérange pas : appli en arrière-plan,
+            // ou personne en train de saisir, de lire une fenêtre ou de toucher l'écran depuis 20 s.
+            // Sinon on réessaie toutes les 10 s et au passage en arrière-plan.
+            let reloadPending = false;
+            let lastInteraction = 0;
+            ['pointerdown', 'keydown', 'scroll'].forEach(type =>
+                window.addEventListener(type, () => { lastInteraction = Date.now(); }, { passive: true, capture: true }));
+            const isBusy = () => {
+                if (document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) return true;
+                if ([...document.querySelectorAll(OVERLAY_SELECTOR)].some(el => getComputedStyle(el).display !== 'none' && !el.classList.contains('hidden'))) return true;
+                return Date.now() - lastInteraction < 20 * 1000;
             };
-            wb.addEventListener('waiting', showUpdateToast);
+            const reloadWhenIdle = () => {
+                if (!reloadPending || (document.visibilityState === 'visible' && isBusy())) return;
+                reloadPending = false;
+                window.location.reload();
+            };
+            // Ancienne version restée en attente (téléphone pas encore passé par ce code) : activée sans demander
+            wb.addEventListener('waiting', () => wb.messageSkipWaiting());
             wb.addEventListener('controlling', (event) => {
                 // Recharge uniquement lors d'une mise à jour, pas à la toute première installation
-                if (event.isUpdate) window.location.reload();
+                if (!event.isUpdate) return;
+                reloadPending = true;
+                newVersionReady = true;
+                reloadWhenIdle();
             });
+            setInterval(reloadWhenIdle, 10 * 1000);
+            document.addEventListener('visibilitychange', reloadWhenIdle);
             wb.register();
             // L'appli installée reste souvent ouverte en arrière-plan : on vérifie s'il y a une
             // nouvelle version à chaque retour dans l'appli et toutes les 30 minutes.
