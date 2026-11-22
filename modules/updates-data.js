@@ -4,7 +4,6 @@ export const updatesLog = [
         date: '22 novembre 2026',
         changes: [
             "**Retours clients** : la responsable peut signaler un chantier depuis un pointage de l'historique. Le profil concerné le voit sur son accueil, le lit et peut répondre (menu « Retours clients »).",
-            "**Photos avant / après** (facultatives) au démarrage et à l'arrêt du pointage, visibles dans l'historique.",
             "**Nouvelle messagerie** : groupes, réponses, réactions, « Vu », mentions, recherche, épingler, sourdine. Chaque message garde le nom du profil qui l'a écrit.",
             "**Historique** : « Cette année » et « Année dernière », avec un relevé d'heures annuel en PDF.",
             "**PDF** : tous au même style (rapport d'activité, planning, mon historique, chantiers, erreurs) ; nouveau « Rapport km en PDF » et export tableur dans le rapport trajets.",

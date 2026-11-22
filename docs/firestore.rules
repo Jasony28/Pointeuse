@@ -79,7 +79,6 @@ service cloud.firestore {
 
     // 4. POINTAGES : lisibles par les comptes validés (règle 1, pour la suggestion « tu étais avec lui ? »
     //    qui cherche le nom du profil dans « colleagues ») ; chacun crée et modifie uniquement les siens.
-    //    Le lien des photos avant / après est enregistré dans le pointage par son propriétaire.
     match /pointages/{docId} {
       allow create: if isAdmin() || (isApproved() && request.resource.data.uid == request.auth.uid);
       allow update: if isAdmin() || (isApproved()

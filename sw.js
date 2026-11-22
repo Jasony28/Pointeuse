@@ -56,7 +56,6 @@ precaching.precacheAndRoute([
     { url: 'modules/native-files.js', revision: APP_VERSION },
     { url: 'modules/html-utils.js', revision: APP_VERSION },
     { url: 'modules/retours-clients.js', revision: APP_VERSION },
-    { url: 'modules/photos-chantier.js', revision: APP_VERSION },
     { url: 'modules/chantiers-pdf.js', revision: APP_VERSION },
 
     // Modules Utilisateur
