@@ -161,6 +161,7 @@ export async function render() {
     };
 
     setTimeout(async () => {
+        if (!currentUser) return; // déconnecté entre-temps (session refusée)
         try {
             await cacheDataForModals();
             await checkForOpenPointage();

@@ -1,6 +1,10 @@
 import { updatesLog } from './modules/updates-data.js';
+import { installNativeFileSaving } from './modules/native-files.js';
 
 const APP_VERSION = 'v2.3.0';
+
+// Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
+installNativeFileSaving();
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -738,6 +742,16 @@ document.addEventListener('DOMContentLoaded', () => {
             await checkPersonalNotifications(userRef, data);
             checkForUpdates(data, userRef, localStorage.getItem('currentProfileName'));
         } catch (error) {
+            // Firebase refuse de relire son propre profil : la session n'est plus valide (mot de passe changé,
+            // compte modifié, connexion abîmée). Sans ça, l'appli restait ouverte avec le profil gardé sur le
+            // téléphone, mais toutes les données étaient refusées (« Erreur » partout, chargements sans fin).
+            const code = String(error?.code || '').replace(/^firestore\//, '');
+            if (code === 'permission-denied' || code === 'unauthenticated') {
+                console.error("Session refusée par Firebase, reconnexion demandée :", error);
+                showInfoModal("Reconnexion nécessaire", "Votre session n'est plus valide (mot de passe ou compte modifié). Reconnectez-vous avec votre e-mail et votre mot de passe.");
+                signOut(auth);
+                return;
+            }
             console.warn("Profil non vérifié (hors ligne ?) :", error);
         }
     }

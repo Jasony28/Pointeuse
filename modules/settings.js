@@ -2,7 +2,7 @@ import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTh
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
-import { loadLibrary } from "./utils.js";
+import { createPdf, pdfHeader, pdfStats, pdfTable, pdfTotal, pdfFinish, pdfText, groupRow, fileStamp, safeName, C } from "./pdf-kit.js";
 
 const auth = getAuth();
 
@@ -592,81 +592,41 @@ async function exportUserHistoryToPDF() {
     if (!exportData) return; 
 
     const { groupedData, totalExportMs, totalExportKm } = exportData;
-    try { await loadLibrary('pdf'); } catch (error) { showInfoModal("Erreur", "La librairie PDF n'a pas pu être chargée."); return; }
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('p', 'mm', 'a4');
-    let currentY = 20; 
-
     // On récupère le bon nom (Profil ou Admin)
-    const activeProfileName = localStorage.getItem('currentProfileName') || currentUser.displayName;
+    const name = localStorage.getItem('currentProfileName') || currentUser.displayName || '';
+    const days = [...groupedData.values()];
+    const entries = days.reduce((n, d) => n + d.entries.length, 0);
+    const keys = [...groupedData.keys()];
+    const fmtKey = (key) => new Date(`${key}T12:00:00`).toLocaleDateString('fr-FR');
+    const km = (v) => `${(v || 0).toFixed(2).replace('.', ',')} km`;
 
-    // --- 1. ENTÊTE ---
-    doc.setFontSize(18).setFont(undefined, 'bold');
-    doc.text("Rapport d'Activité & Kilométrage", 14, currentY);
-    currentY += 10;
+    let doc;
+    try { doc = await createPdf('portrait'); } catch (error) { showInfoModal("Erreur", "La librairie PDF n'a pas pu être chargée."); return; }
+    let y = pdfHeader(doc, { title: 'Mon historique de pointages', right: [name, `Du ${fmtKey(keys[0])} au ${fmtKey(keys[keys.length - 1])}`] });
+    y = pdfStats(doc, y, [
+        ['Total des heures', formatMsToHHm(totalExportMs)],
+        ['Jours travaillés', String(days.length)],
+        ['Pointages', String(entries)],
+        ['Distance totale', km(totalExportKm), C.DARK],
+    ]);
 
-    doc.setFontSize(11).setFont(undefined, 'normal');
-    doc.text(`Employé : ${activeProfileName}`, 14, currentY);
-    currentY += 6;
-    doc.text(`Période : Historique complet au ${new Date().toLocaleDateString('fr-FR')}`, 14, currentY);
-    currentY += 10;
-
-    // --- RÉCAPITULATIF TOTAL ---
-    doc.setDrawColor(41, 128, 185).setLineWidth(0.5);
-    doc.rect(14, currentY, 182, 15);
-    doc.setFont(undefined, 'bold');
-    doc.text(`TOTAL CUMULÉ : ${formatMsToHHm(totalExportMs)}`, 20, currentY + 10);
-    doc.text(`DISTANCE TOTALE : ${totalExportKm.toFixed(2)} km`, 120, currentY + 10);
-    currentY += 25;
-
-    // --- 2. TABLEAUX PAR JOUR ---
-    const tableHeaders = ["Chantier", "Début", "Fin", "Durée", "KM", "Notes"];
-    
-    for (const [dateKey, dayData] of groupedData.entries()) {
-        
-        // Vérifier s'il reste assez de place pour le titre + 1 ligne
-        if (currentY > 250) { 
-            doc.addPage();
-            currentY = 20; 
-        }
-
-        doc.setFontSize(12).setFont(undefined, 'bold');
-        doc.text(dayData.dateDisplay, 14, currentY);
-        currentY += 5;
-
-        // Génération du tableau
-        doc.autoTable({
-            head: [tableHeaders],
-            body: dayData.entries.map(e => [e.chantier, e.startTime, e.endTime, e.duration, e.km, e.notes]),
-            startY: currentY,
-            theme: 'striped',
-            headStyles: { fillColor: [41, 128, 185] },
-            styles: { fontSize: 8, cellPadding: 2 },
-            columnStyles: {
-                0: { cellWidth: 35 }, // Chantier
-                1: { cellWidth: 15 }, // Début
-                2: { cellWidth: 15 }, // Fin
-                3: { cellWidth: 18 }, // Durée
-                4: { cellWidth: 15 }, // KM
-                5: { cellWidth: 'auto'} // Notes
-            },
-            margin: { left: 14, right: 14 },
-            didDrawPage: (data) => {
-                doc.setFontSize(8).setFont(undefined, 'normal');
-                doc.text(`Page ${doc.internal.getNumberOfPages()}`, 105, 287, { align: 'center' });
-            }
-        });
-
-        const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : (doc.autoTable.previous ? doc.autoTable.previous.finalY : currentY + 20);
-        
-        // Mise à jour de la position pour éviter la superposition
-        currentY = finalY + 8;
-
-        // Total journalier
-        doc.setFontSize(9).setFont(undefined, 'bold');
-        doc.text(`Total Jour : ${formatMsToHHm(dayData.totalDayMs)} | ${dayData.totalDayKm.toFixed(2)} km`, 196, currentY - 3, { align: 'right' });
-        currentY += 5;
-    }
-
-    doc.save(`Historique_Pointages_${activeProfileName.replace(/ /g, '_')}.pdf`);
+    const body = [];
+    days.forEach(day => {
+        const label = day.dateDisplay.charAt(0).toUpperCase() + day.dateDisplay.slice(1);
+        body.push(groupRow(label, day.totalDayKm > 0 ? `${formatMsToHHm(day.totalDayMs)} · ${km(day.totalDayKm)}` : formatMsToHHm(day.totalDayMs), 4));
+        day.entries.forEach(e => body.push([
+            `${e.startTime} - ${e.endTime}`,
+            pdfText(e.notes ? `${e.chantier}\n${e.notes}` : e.chantier),
+            e.km,
+            { content: e.duration, styles: { halign: 'right', fontStyle: 'bold' } },
+        ]));
+    });
+    y = pdfTable(doc, {
+        startY: y + 1,
+        head: [['Horaires', 'Chantier', 'Km', 'Durée']],
+        body,
+        columnStyles: { 0: { cellWidth: 26 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 24, halign: 'right', textColor: C.MUTED }, 3: { cellWidth: 22, halign: 'right' } },
+    });
+    pdfTotal(doc, y + 8, `Total des heures exportées · ${km(totalExportKm)}`, formatMsToHHm(totalExportMs));
+    pdfFinish(doc, `${name} · Historique de pointages`, `Historique_Pointages_${safeName(name)}_${fileStamp()}.pdf`);
 }

@@ -1,7 +1,10 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, navigateTo } from "../app.js";
-import { getWeekDateRange, formatMilliseconds, loadLibrary } from "./utils.js";
+import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers } from "./data-service.js";
+import { loadPdf } from "./libs.js";
+import { openRetourModal, getRetoursForUser, levelPill } from "./retours-clients.js";
+import { photoChipsHTML, handlePhotoChipClick } from "./photos-chantier.js";
 
 let currentWeekOffset = 0;
 let currentCalendarDate = new Date();
@@ -10,6 +13,7 @@ let chantiersCache = [];
 let colleaguesCache = [];
 let pointagesPourPdf = [];
 let allPointages = [];
+let retoursByPointage = new Map(); // retours clients non annulés, par pointage
 let entryWizardStep = 1;
 let entryWizardData = {};
 
@@ -180,6 +184,8 @@ export async function render(params = {}) {
                     <button type="button" data-period="lastweek">Semaine dernière</button>
                     <button type="button" data-period="month">Ce mois</button>
                     <button type="button" data-period="lastmonth">Mois dernier</button>
+                    <button type="button" data-period="year">Cette année</button>
+                    <button type="button" data-period="lastyear">Année dernière</button>
                 </div>
                 <div id="activeFilterBanner" class="filter-banner hidden"></div>
                 <div class="rounded-lg shadow-sm p-4 mb-4" id="weekly-nav" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
@@ -289,6 +295,7 @@ export async function render(params = {}) {
             }
         }
 
+        if (!document.getElementById('historyList')) return; // page quittée pendant le chargement
         setupEventListeners();
         setupReassignModalListeners();
         currentWeekOffset = 0;
@@ -616,9 +623,13 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
     if (!historyList) return;
     historyList.innerHTML = `<p class='text-center p-4' style='color: var(--color-text-muted);'>Chargement...</p>`;
 
-    const { pointages, trajetsMap, retoursMap } = await getPointages(startDate, endDate, chantierFilter);
+    const [{ pointages, trajetsMap, retoursMap }, retoursClients] = await Promise.all([
+        getPointages(startDate, endDate, chantierFilter),
+        getRetoursForUser(targetUser.uid).catch(() => []),
+    ]);
     if (!historyList.isConnected) return; // page quittée pendant le chargement
     allPointages = pointages;
+    retoursByPointage = new Map(retoursClients.filter(r => !r.cancelled).map(r => [r.pointageId, r]));
 
     let displayPointages = [...pointages];
     if (localStealthMode === true) {
@@ -657,6 +668,7 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
 
     historyList.innerHTML = "";
     let totalMs = 0, totalKm = 0, totalMin = 0, daysWorked = 0;
+    const longRange = new Date(endDate) - new Date(startDate) > 40 * 86400000;
 
     const daysOfWeek = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
@@ -667,6 +679,7 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
         totalMin += dayData.dailyTotalMin;
 
         if(chantierFilter && dayData.entries.length === 0) return;
+        if (longRange && dayData.entries.length === 0) return; // sur plusieurs mois, les jours vides ne sont pas listés
         if (dayData.entries.length > 0) daysWorked++;
 
         const dayWrapper = document.createElement('div');
@@ -727,6 +740,7 @@ async function renderCalendar() {
     }, {});
 
     const grid = document.getElementById("calendar-grid");
+    if (!grid) return; // page quittée pendant le chargement
     grid.innerHTML = '';
     const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     days.forEach(day => grid.innerHTML += `<div class="font-semibold text-center text-sm p-2" style="color: var(--color-text-muted);">${day}</div>`);
@@ -766,6 +780,7 @@ async function renderCalendar() {
 
 function setupEventListeners() {
     const toggleBtn = document.getElementById('toggleFiltersBtn');
+    if (!toggleBtn) return; // page quittée pendant le chargement
     const filtersContent = document.getElementById('filters-content');
     const toggleLabel = toggleBtn.innerHTML;
     toggleBtn.addEventListener('click', () => {
@@ -780,6 +795,14 @@ function setupEventListeners() {
             const period = btn.dataset.period;
             if (period === 'week') { resetFilters(); return; }
             if (period === 'lastweek') { resetFilters(); currentWeekOffset = -1; loadHistoryForWeek(); setActivePeriod('lastweek'); return; }
+            if (period === 'year' || period === 'lastyear') {
+                // Année entière (jusqu'à aujourd'hui pour l'année en cours) : sert au relevé d'heures annuel en PDF
+                const year = now.getFullYear() - (period === 'lastyear' ? 1 : 0);
+                const start = new Date(year, 0, 1);
+                const end = period === 'year' ? new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999) : new Date(year, 11, 31, 23, 59, 59, 999);
+                showRange(start, end, `Année ${year}`, null, period);
+                return;
+            }
             const offset = period === 'lastmonth' ? -1 : 0;
             const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
             const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0, 23, 59, 59, 999);
@@ -918,9 +941,19 @@ function updatePdfButtonState(hasData) {
 }
 
 function handleHistoryClick(e) {
+    if (handlePhotoChipClick(e)) return;
+    const retourLink = e.target.closest('.retour-link');
+    if (retourLink) {
+        if (currentUser.role === 'admin' && targetUser.uid !== currentUser.uid) navigateTo('admin-retours', { userId: targetUser.uid });
+        else navigateTo('user-retours', { retourId: retourLink.dataset.retour });
+        return;
+    }
     if (currentUser.role !== 'admin' || localStealthMode === true) return;
     const target = e.target;
-    if (target.closest('.add-pointage-btn')) {
+    if (target.closest('.retour-btn')) {
+        const pointageData = allPointages.find(p => p.id === target.closest('.retour-btn').dataset.id);
+        if (pointageData) openRetourModal(pointageData, { userName: targetUser.name, onSaved: () => displayHistoryList(lastLoadedState.start, lastLoadedState.end, lastLoadedState.chantier) });
+    } else if (target.closest('.add-pointage-btn')) {
         openEntryModal({ isEditing: false, date: target.closest('.add-pointage-btn').dataset.date });
     } else if (target.closest('.edit-btn')) {
         const pointageId = target.closest('.edit-btn').dataset.id;
@@ -964,7 +997,9 @@ function createHistoryEntryElement(d, trajetData, retourData) {
         timeDisplay = `Débuté à ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · en cours`;
         durationDisplay = `<span class="hours-live mt-1"><span class="hours-live-dot"></span>En cours</span>`;
     }
-    wrapper.innerHTML = `<div class="${currentUser.role === 'admin' && !localStealthMode ? 'pr-28' : 'pr-20'}"><div class="entry-profile">${d.userName || 'Inconnu'}</div><div class="font-bold">${d.chantier}</div><div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}</div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
+    const retourClient = retoursByPointage.get(d.id);
+    const retourDisplay = retourClient ? `<button type="button" class="retour-link" data-retour="${retourClient.id}">${levelPill(retourClient.level)}<span>Retour client</span></button>` : '';
+    wrapper.innerHTML = `<div class="${currentUser.role === 'admin' && !localStealthMode ? 'pr-36' : 'pr-20'}"><div class="entry-profile">${d.userName || 'Inconnu'}</div><div class="font-bold">${d.chantier}</div>${retourDisplay}${photoChipsHTML(d)}<div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}</div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
 
     if (currentUser.role === 'admin' && !localStealthMode) {
         const controlsWrapper = document.createElement("div");
@@ -972,6 +1007,7 @@ function createHistoryEntryElement(d, trajetData, retourData) {
         const buttonsDiv = document.createElement('div');
         buttonsDiv.className = 'entry-actions';
         buttonsDiv.innerHTML = `
+            <button class="retour-btn icon-btn is-retour" title="Retour client" aria-label="Retour client" data-id="${d.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v4M12 14h.01"/></svg></button>
             <button class="edit-btn icon-btn" title="Modifier" aria-label="Modifier" data-id="${d.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
             <button class="reassign-btn icon-btn" title="Réattribuer" aria-label="Réattribuer" data-id="${d.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></button>
             <button class="delete-btn icon-btn is-danger" title="Supprimer" aria-label="Supprimer" data-id="${d.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>
@@ -1244,8 +1280,8 @@ async function generateHistoryPDF() {
         return;
     }
 
-    try { await loadLibrary('pdf'); } catch (error) { /* message ci-dessous */ }
-    const { jsPDF } = window.jspdf || {};
+    let jsPDF;
+    try { ({ jsPDF } = await loadPdf()); } catch { jsPDF = null; }
     if (!jsPDF || !jsPDF.API.autoTable) {
         showInfoModal("Erreur", "La librairie PDF n'a pas pu être chargée.");
         return;
@@ -1334,6 +1370,41 @@ async function generateHistoryPDF() {
         doc.setFont(undefined, 'normal');
     });
 
+    // --- Récapitulatif par mois (relevé sur plusieurs mois, par ex. l'année) ---
+    let tableStart = 180;
+    const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const monthLabel = (d) => { const l = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); return l.charAt(0).toUpperCase() + l.slice(1); };
+    const months = [];
+    days.forEach(day => {
+        const key = monthKey(day.date);
+        let m = months[months.length - 1];
+        if (!m || m.key !== key) { m = { key, label: monthLabel(day.date), days: 0, entries: 0, totalMs: 0 }; months.push(m); }
+        m.days++; m.entries += day.entries.length; m.totalMs += day.totalMs;
+    });
+    if (months.length > 1) {
+        doc.setFont(undefined, 'bold'); doc.setFontSize(12); doc.setTextColor(...DARK);
+        doc.text('Récapitulatif par mois', margin, 190);
+        doc.autoTable({
+            startY: 198,
+            margin: { left: margin, right: margin, bottom: 50 },
+            head: [['Mois', 'Jours travaillés', 'Pointages', 'Travail effectif']],
+            body: [
+                ...months.map(m => [m.label, String(m.days), String(m.entries), { content: formatMilliseconds(m.totalMs), styles: { halign: 'right', fontStyle: 'bold', textColor: PRIMARY } }]),
+                [{ content: 'Total', styles: { fontStyle: 'bold' } }, { content: String(days.length), styles: { fontStyle: 'bold' } }, { content: String(dataForPdf.length), styles: { fontStyle: 'bold' } }, { content: formatMilliseconds(totalEffectiveMs), styles: { halign: 'right', fontStyle: 'bold', textColor: DARK } }],
+            ],
+            theme: 'plain',
+            headStyles: { fillColor: DARK, textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+            styles: { fontSize: 8.5, cellPadding: 5, textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: { bottom: 0.5 } },
+            columnStyles: { 0: { cellWidth: 'auto', fontStyle: 'bold' }, 1: { cellWidth: 90, halign: 'center' }, 2: { cellWidth: 80, halign: 'center' }, 3: { cellWidth: 100, halign: 'right' } },
+            didParseCell: (data) => { if (data.section === 'head' && data.column.index > 0) data.cell.styles.halign = data.column.index === 3 ? 'right' : 'center'; },
+        });
+        doc.addPage();
+        doc.setFont(undefined, 'bold'); doc.setFontSize(12); doc.setTextColor(...DARK);
+        doc.text('Détail jour par jour', margin, 50);
+        doc.setFont(undefined, 'normal');
+        tableStart = 60;
+    }
+
     // --- Tableau ---
     const body = [];
     days.forEach((day, index) => {
@@ -1360,10 +1431,18 @@ async function generateHistoryPDF() {
                 { content: formatMilliseconds(weekMs), styles: { fontStyle: 'bold', halign: 'right', textColor: DARK } },
             ]);
         }
+        // Total du mois quand le relevé couvre plusieurs mois
+        if (months.length > 1 && (!next || monthKey(next.date) !== monthKey(day.date))) {
+            const m = months.find(x => x.key === monthKey(day.date));
+            body.push([
+                { content: `Total ${m.label}`, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', textColor: PRIMARY, fillColor: [238, 242, 255] } },
+                { content: formatMilliseconds(m.totalMs), styles: { fontStyle: 'bold', halign: 'right', textColor: PRIMARY, fillColor: [238, 242, 255] } },
+            ]);
+        }
     });
 
     doc.autoTable({
-        startY: 180,
+        startY: tableStart,
         margin: { left: margin, right: margin, bottom: 50 },
         head: [['Horaires', 'Chantier', 'Pause', 'Effectif']],
         body,

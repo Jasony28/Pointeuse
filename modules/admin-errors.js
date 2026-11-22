@@ -1,5 +1,6 @@
 import { collection, query, orderBy, limit, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, showConfirmationModal, showToast } from "../app.js";
+import { db, pageContent, showConfirmationModal, showToast, showInfoModal } from "../app.js";
+import { createPdf, pdfHeader, pdfStats, pdfSection, pdfTable, pdfFinish, pdfText, fileStamp, C } from "./pdf-kit.js";
 
 // Suivi des erreurs : erreurs remontées automatiquement par l'application chez les utilisateurs
 // (collection "errorLogs", voir reportError dans app.js), regroupées par message.
@@ -22,8 +23,9 @@ export async function render() {
                     <h2 class="text-2xl font-bold">Suivi des erreurs</h2>
                     <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Problèmes rencontrés par les utilisateurs, remontés automatiquement par l'application.</p>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2">
                     <button id="refreshErrorsBtn" class="btn btn-secondary">Actualiser</button>
+                    <button id="exportErrorsPdfBtn" class="btn btn-secondary">Exporter en PDF</button>
                     <button id="clearErrorsBtn" class="btn btn-secondary" style="color: var(--color-danger);">Tout effacer</button>
                 </div>
             </div>
@@ -32,6 +34,7 @@ export async function render() {
         </div>
     `;
     document.getElementById('refreshErrorsBtn').onclick = loadErrors;
+    document.getElementById('exportErrorsPdfBtn').onclick = exportErrorsPdf;
     document.getElementById('clearErrorsBtn').onclick = clearErrors;
     await loadErrors();
 }
@@ -49,18 +52,70 @@ async function loadErrors() {
     }
 }
 
-function renderErrors() {
-    const list = document.getElementById('errorsList');
-    const summary = document.getElementById('errorsSummary');
-
-    // Regroupement par message : une ligne par problème, avec le nombre d'occurrences
+// Regroupement par message : une ligne par problème, avec le nombre d'occurrences
+function groupLogs() {
     const groups = new Map();
     logs.forEach(log => {
         const key = `${log.context}|${log.message}`;
         if (!groups.has(key)) groups.set(key, { message: log.message, context: log.context, items: [] });
         groups.get(key).items.push(log);
     });
-    const sorted = [...groups.values()].sort((a, b) => b.items.length - a.items.length);
+    return [...groups.values()].sort((a, b) => b.items.length - a.items.length);
+}
+
+// PDF du suivi des erreurs (à envoyer pour dépannage) : un bloc par problème, du plus fréquent au plus rare,
+// avec les personnes, appareils, versions et le détail technique de la dernière occurrence.
+async function exportErrorsPdf() {
+    if (!logs.length) { showInfoModal("Information", "Aucune erreur à exporter."); return; }
+    const btn = document.getElementById('exportErrorsPdfBtn');
+    btn.disabled = true;
+    try {
+        const doc = await createPdf('portrait');
+        const groups = groupLogs();
+        const dayAgo = Date.now() - 86400000;
+        const recent = logs.filter(l => (l.createdAt?.toDate ? l.createdAt.toDate() : new Date(l.clientTime)) > dayAgo).length;
+        const users = new Set(logs.map(l => l.uid)).size;
+
+        let y = pdfHeader(doc, { title: 'Suivi des erreurs', right: [`${groups.length} problème${groups.length > 1 ? 's' : ''}`, `${logs.length} erreur${logs.length > 1 ? 's' : ''} enregistrée${logs.length > 1 ? 's' : ''}`] });
+        y = pdfStats(doc, y, [
+            ['Erreurs', String(logs.length)],
+            ['Dernières 24 h', String(recent), recent ? C.DANGER : C.OK],
+            ['Problèmes différents', String(groups.length)],
+            ['Utilisateurs touchés', String(users)],
+        ]);
+        y = pdfSection(doc, y + 2, 'Problèmes, du plus fréquent au plus rare');
+        pdfTable(doc, {
+            startY: y + 1,
+            head: [['Nb', 'Problème', 'Qui, où, quand']],
+            body: groups.map(group => {
+                const last = group.items[0];
+                const people = [...new Set(group.items.map(i => i.userName).filter(Boolean))].join(', ') || 'inconnu';
+                const pages = [...new Set(group.items.map(i => i.page).filter(Boolean))].join(', ');
+                const devices = [...new Set(group.items.map(i => `${device(i.userAgent)} ${i.appVersion || ''}`.trim()))].join(', ');
+                const stack = String(last.stack || '').split('\n').slice(0, 6).map(l => l.trim()).join('\n');
+                return [
+                    `${group.items.length}×`,
+                    pdfText(`${group.message}${group.context ? `\n[${group.context}]` : ''}${stack ? `\n\n${stack}` : ''}`),
+                    pdfText(`Dernière fois : ${when(last)}\nUtilisateurs : ${people}${pages ? `\nPage : ${pages}` : ''}\nAppareil / version : ${devices}${group.items.some(i => i.online === false) ? '\n(parfois hors ligne)' : ''}`),
+                ];
+            }),
+            styles: { fontSize: 7.5 },
+            columnStyles: { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold', textColor: C.DANGER }, 1: { cellWidth: 108 }, 2: { cellWidth: 'auto', textColor: C.MUTED } },
+        });
+        pdfFinish(doc, 'Suivi des erreurs', `Erreurs_${fileStamp()}.pdf`);
+    } catch (error) {
+        console.warn("Export PDF des erreurs impossible :", error);
+        showInfoModal("Erreur", "Le PDF n'a pas pu être créé. Vérifiez la connexion internet et réessayez.");
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function renderErrors() {
+    const list = document.getElementById('errorsList');
+    const summary = document.getElementById('errorsSummary');
+
+    const sorted = groupLogs();
 
     const dayAgo = Date.now() - 86400000;
     const recent = logs.filter(l => (l.createdAt?.toDate ? l.createdAt.toDate() : new Date(l.clientTime)) > dayAgo).length;
