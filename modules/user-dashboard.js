@@ -796,12 +796,15 @@ function initUnreadMessagesListener() {
         snapshot.forEach(doc => {
             const data = doc.data();
             if (data.hiddenFor && data.hiddenFor.includes(currentUser.uid)) return;
+            if (data.mutedBy && data.mutedBy.includes(currentUser.uid)) return; // discussion en sourdine
             const myUnreadCount = (data.unreadCounts && data.unreadCounts[currentUser.uid]) ? data.unreadCounts[currentUser.uid] : 0;
             if (myUnreadCount > 0) {
                 totalUnread += myUnreadCount;
-                const otherName = data.participantNames.find(n => n !== activeProfileName) || 'Collègue';
+                const otherId = (data.participants || []).find(id => id !== currentUser.uid);
+                const otherName = data.type === 'group' ? (data.name || 'Groupe')
+                    : (data.memberNames?.[otherId] || (data.participantNames || []).find(n => n !== activeProfileName && n !== currentUser.displayName) || 'Collègue');
                 senders.add(otherName);
-                lastMessagePreview = data.lastMessage;
+                lastMessagePreview = data.lastMessage || '';
             }
         });
 
@@ -817,8 +820,8 @@ function initUnreadMessagesListener() {
                             <span class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white ring-2 ring-white animate-pulse">${totalUnread}</span>
                         </div>
                         <div>
-                            <h3 class="font-bold text-lg" style="color: var(--color-text-base);">${isMultiple ? 'Nouveaux messages' : `Message de ${senderNames}`}</h3>
-                            <p class="text-sm line-clamp-1" style="color: var(--color-text-muted);">${isMultiple ? `Vous avez des messages de : ${senderNames}` : `"${lastMessagePreview}"`}</p>
+                            <h3 class="font-bold text-lg" style="color: var(--color-text-base);">${isMultiple ? 'Nouveaux messages' : `Message de ${escapeHTML(senderNames)}`}</h3>
+                            <p class="text-sm line-clamp-1" style="color: var(--color-text-muted);">${isMultiple ? `Vous avez des messages de : ${escapeHTML(senderNames)}` : `"${escapeHTML(lastMessagePreview)}"`}</p>
                         </div>
                     </div>
                     <div class="text-gray-400 group-hover:translate-x-1 transition-transform">
