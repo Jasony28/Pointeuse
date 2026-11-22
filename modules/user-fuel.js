@@ -6,42 +6,9 @@ import { collection, query, where, getDocs, getDoc, doc, writeBatch, serverTimes
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, showToast, getActiveProfileName, isActiveProfile } from "../app.js";
 import { PLEINS, PLEINS_PHOTOS, PLATE_MAX, PHOTO_MAX_CHARS, DEFAULT_PLATES, NO_PLATE, plateLabel, parseAmount, normalizePlate, validatePlein, summarize, byNewest, litresLabel, eurosLabel, perLitreLabel } from './pleins.js';
 
-export const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-// « 2026-10-30 » → « ven. 30 oct. »
-export function dayLabel(isoDate) {
-    if (!isoDate) return '';
-    return new Date(`${isoDate}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
-/** Réduit une photo (JPEG) pour qu'elle tienne dans le document Firestore. */
-function compressImage(file, maxSide, quality) {
-    return new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onload = () => {
-            const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-            const canvas = document.createElement('canvas');
-            canvas.width = Math.round(img.width * scale);
-            canvas.height = Math.round(img.height * scale);
-            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-            URL.revokeObjectURL(url);
-            resolve(canvas.toDataURL('image/jpeg', quality));
-        };
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible')); };
-        img.src = url;
-    });
-}
-
-/** Grande photo par-dessus l'écran (touche ou bouton pour fermer). */
-function openPhoto(src) {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal rc-photo-view';
-    overlay.innerHTML = `<img src="${src}" alt="Photo du plein"><button type="button" class="btn btn-secondary">Fermer</button>`;
-    overlay.querySelector('button').onclick = () => overlay.remove();
-    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-    document.body.appendChild(overlay);
-}
+export { escapeHTML } from './html-utils.js';
+import { escapeHTML } from './html-utils.js';
+import { compressImage, openPhoto, dayLabel } from './retours-clients.js';
 
 const LAST_PLATE_KEY = 'lastFuelPlate';
 const OTHER_PLATE = '__autre';

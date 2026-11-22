@@ -51,6 +51,13 @@ precaching.precacheAndRoute([
     { url: 'modules/updates-data.js', revision: APP_VERSION },
     { url: 'modules/settings.js', revision: APP_VERSION },
     { url: 'modules/chantiers.js', revision: APP_VERSION },
+    { url: 'modules/libs.js', revision: APP_VERSION },
+    { url: 'modules/pdf-kit.js', revision: APP_VERSION },
+    { url: 'modules/native-files.js', revision: APP_VERSION },
+    { url: 'modules/html-utils.js', revision: APP_VERSION },
+    { url: 'modules/retours-clients.js', revision: APP_VERSION },
+    { url: 'modules/photos-chantier.js', revision: APP_VERSION },
+    { url: 'modules/chantiers-pdf.js', revision: APP_VERSION },
 
     // Modules Utilisateur
     { url: 'modules/user-dashboard.js', revision: APP_VERSION },
@@ -58,6 +65,7 @@ precaching.precacheAndRoute([
     { url: 'modules/user-leave.js', revision: APP_VERSION },
     { url: 'modules/user-stats.js', revision: APP_VERSION },
     { url: 'modules/user-chat.js', revision: APP_VERSION },
+    { url: 'modules/user-retours.js', revision: APP_VERSION },
     { url: 'modules/user-fuel.js', revision: APP_VERSION },
     { url: 'modules/pleins.js', revision: APP_VERSION },
     { url: 'modules/fuel-cost.js', revision: APP_VERSION },
@@ -76,6 +84,7 @@ precaching.precacheAndRoute([
     { url: 'modules/admin-live-view.js', revision: APP_VERSION },
     { url: 'modules/admin-site-requests.js', revision: APP_VERSION },
     { url: 'modules/admin-errors.js', revision: APP_VERSION },
+    { url: 'modules/admin-retours.js', revision: APP_VERSION },
 
     // Ressources statiques
     { url: 'icons/pointeuse-192.png', revision: APP_VERSION },

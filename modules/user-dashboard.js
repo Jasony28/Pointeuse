@@ -2,6 +2,9 @@ import { collection, query, where, orderBy, getDocs, doc, getDoc, addDoc, server
 import { db, currentUser, pageContent, showInfoModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getActiveChantiers } from "./data-service.js";
+import { escapeHTML } from './html-utils.js';
+import { getUnreadRetours } from './retours-clients.js';
+import { photoFieldHTML, bindPhotoField, uploadPointagePhoto } from './photos-chantier.js';
 
 let timerInterval = null;
 let chantiersCache = [];
@@ -20,7 +23,7 @@ export async function render() {
 
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
-            
+            <div id="retours-clients-banner" hidden></div>
             <div>
                 <div id="live-tracker-container" class="p-6 rounded-lg shadow-lg" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
                 <div class="manual-entry-link">
@@ -62,6 +65,7 @@ export async function render() {
                         <label class="text-sm font-medium" style="color: var(--color-text-muted);">Chantier</label>
                         <select id="startChantierSelect" class="w-full border p-3 rounded mt-1 focus:outline-none focus:ring-2" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);" required></select>
                     </div>
+                    ${photoFieldHTML('avant')}
                     
                     <div class="flex justify-end gap-4 pt-4 border-t" style="border-color: var(--color-border);">
                         <button type="button" id="cancelStartPointage" class="px-4 py-2 rounded font-bold transition-colors border" style="background-color: var(--color-background); color: var(--color-text-base); border-color: var(--color-border);">Annuler</button>
@@ -83,6 +87,7 @@ export async function render() {
                             <label for="pointageNotes" class="text-sm font-medium" style="color: var(--color-text-muted);">Note (facultatif)</label>
                             <textarea id="pointageNotes" placeholder="Problème, matériel manquant..." class="w-full border p-3 rounded mt-1 h-24 focus:outline-none focus:ring-2" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);"></textarea>
                         </div>
+                        ${photoFieldHTML('apres')}
                         <div class="flex justify-end gap-4 pt-4 border-t" style="border-color: var(--color-border);">
                             <button type="button" id="cancelStopPointage" class="px-4 py-2 rounded font-bold transition-colors border" style="background-color: var(--color-background); color: var(--color-text-base); border-color: var(--color-border);">Annuler</button>
                             <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded transition-colors">Arrêter et enregistrer</button>
@@ -165,6 +170,7 @@ export async function render() {
         try {
             await cacheDataForModals();
             await checkForOpenPointage();
+            loadRetoursBanner();
             initUnreadMessagesListener();
             
             const activeProfile = getActiveProfileName();
@@ -354,8 +360,10 @@ async function startPointage(chantierId, chantierName) {
         const newPointageRef = await addDoc(collection(db, "pointages"), newPointageData);
         localStorage.setItem(`activePointage_${activeProfileName}`, JSON.stringify({ docId: newPointageRef.id, ...newPointageData }));
         initLiveTracker();
+        return newPointageRef.id; // pour y joindre la photo « avant »
     } catch (error) {
         showInfoModal("Erreur", "Le démarrage du pointage a échoué.");
+        return null;
     }
 }
 
@@ -391,6 +399,7 @@ async function openStartModal() {
 
     document.getElementById('startActiveProfileDisplay').textContent = getActiveProfileName();
     chantierSelect.innerHTML = '<option>Chargement...</option>';
+    const photo = bindPhotoField(form);
     modal.classList.remove('hidden');
     
     const { weeklyChantiers, todaysChantiers } = await getContextualLists();
@@ -426,7 +435,8 @@ async function openStartModal() {
         if (!chantierId) { showInfoModal("Attention", "Veuillez choisir un chantier."); return; }
         const chantierName = chantiersCache.find(c => c.id === chantierId)?.name;
         
-        startPointage(chantierId, chantierName);
+        const photoFile = photo.file();
+        startPointage(chantierId, chantierName).then(pointageId => uploadPointagePhoto(pointageId, 'avant', photoFile));
         modal.classList.add('hidden');
     };
 }
@@ -437,11 +447,14 @@ function openStopModal() {
     
     document.getElementById('stopActiveProfileDisplay').textContent = getActiveProfileName();
     form.reset();
+    const photo = bindPhotoField(form);
     modal.classList.remove('hidden');
     
     form.onsubmit = (e) => {
         e.preventDefault();
+        const pointageId = JSON.parse(localStorage.getItem(`activePointage_${getActiveProfileName()}`) || 'null')?.docId;
         stopPointage(document.getElementById('pointageNotes').value.trim());
+        uploadPointagePhoto(pointageId, 'apres', photo.file());
         modal.classList.add('hidden');
     };
 }
@@ -820,4 +833,23 @@ function initUnreadMessagesListener() {
             container.innerHTML = '';
         }
     });
+}
+
+// Bandeau « retour client à lire » (profil actif) : reste affiché tant que l'employé n'a pas touché « J'ai pris connaissance »
+async function loadRetoursBanner() {
+    const box = document.getElementById('retours-clients-banner');
+    if (!box) return;
+    let unread = [];
+    try { unread = await getUnreadRetours(); } catch (error) { console.error("Erreur de chargement des retours clients:", error); }
+    if (!box.isConnected || !unread.length) return;
+    const first = unread[0];
+    const serious = unread.some(r => r.level === 3);
+    box.innerHTML = `
+        <button type="button" class="rc-banner ${serious ? 'is-serious' : ''}">
+            <span class="rc-banner-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v4M12 14h.01"/></svg></span>
+            <span class="rc-banner-text"><b>${unread.length > 1 ? `${unread.length} retours clients à lire` : 'Tu as un retour client à lire'}</b><span>${escapeHTML(first.chantier)}</span></span>
+            <svg class="rc-banner-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>`;
+    box.querySelector('button').onclick = () => navigateTo('user-retours', { retourId: first.id });
+    box.hidden = false;
 }
