@@ -2,7 +2,6 @@ import { collection, query, where, orderBy, getDocs, doc, getDoc, addDoc, server
 import { db, currentUser, pageContent, showInfoModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getActiveChantiers } from "./data-service.js";
-import { escapeHTML } from './html-utils.js';
 import { getUnreadRetours } from './retours-clients.js';
 import { photoFieldHTML, bindPhotoField, uploadPointagePhoto } from './photos-chantier.js';
 
