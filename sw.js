@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v2.2.0'; // <--- À changer à chaque nouvelle version (avec app.js)
+const APP_VERSION = 'v2.3.0'; // <--- À changer à chaque nouvelle version (avec app.js)
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -46,6 +46,9 @@ precaching.precacheAndRoute([
     { url: 'modules/user-leave.js', revision: APP_VERSION },
     { url: 'modules/user-stats.js', revision: APP_VERSION },
     { url: 'modules/user-chat.js', revision: APP_VERSION },
+    { url: 'modules/user-fuel.js', revision: APP_VERSION },
+    { url: 'modules/pleins.js', revision: APP_VERSION },
+    { url: 'modules/fuel-cost.js', revision: APP_VERSION },
 
     // Modules Admin
     { url: 'modules/admin-chantiers.js', revision: APP_VERSION },

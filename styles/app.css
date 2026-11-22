@@ -2980,3 +2980,61 @@ html.cat ::selection { background: color-mix(in srgb, var(--color-primary) 30%, 
     html.cat .spinner, html.cat .tracker.is-running .tracker-dot, html.cat .bottom-nav-item.is-active::after { animation: none; }
 }
 html.cat .toast > svg { display: none; }
+
+/* Carburant : pleins notés par les conducteurs (modules/user-fuel.js, rapport trajets), comme la Pointeuse LPF */
+.rc-page { display: flex; flex-direction: column; gap: 1rem; }
+.rc-help { font-size: 0.8125rem; color: var(--color-text-muted); }
+.rc-empty { padding: 2rem 1rem; text-align: center; color: var(--color-text-muted); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.rc-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.rc-actions { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.rc-actions .btn { min-height: 34px; padding: 0.375rem 0.75rem; font-size: 0.8125rem; }
+.rc-danger { color: var(--color-danger); }
+.modal.rc-photo-view {
+    flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem;
+    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    overflow: hidden;
+}
+.rc-photo-view img {
+    display: block; width: auto; height: auto; max-width: 100%;
+    max-height: calc(100dvh - 6rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    object-fit: contain; border-radius: var(--radius-lg); box-shadow: var(--shadow-xl);
+}
+.rc-photo-view .btn { flex: none; }
+.pc-pick {
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 46px; padding: 0.5rem 0.75rem;
+    border: 1.5px dashed var(--color-border-strong); border-radius: var(--radius); color: var(--color-text-muted);
+    font-size: 0.875rem; font-weight: 600; cursor: pointer;
+}
+.pc-pick:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.pc-pick svg { width: 18px; height: 18px; flex: none; }
+.pc-preview { display: flex; align-items: center; gap: 0.75rem; }
+.pc-preview img { width: 72px; height: 72px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--color-border); }
+.fu-form { display: flex; flex-direction: column; gap: 0.875rem; padding: 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.fu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.875rem; }
+.fu-grid .input { width: 100%; min-width: 0; }
+.fu-grid .input-suffix .input { padding-right: 2.25rem; }
+.fu-plate { text-transform: uppercase; font-family: var(--font-mono); letter-spacing: 0.04em; }
+.fu-plate::placeholder { letter-spacing: 0.04em; }
+.fu-form [hidden], .pc-pick[hidden], .pc-preview[hidden] { display: none; }
+.fu-form .pc-preview img { width: 96px; height: 96px; }
+.fu-title { margin: 0; font-size: 1.0625rem; font-weight: 700; }
+.fu-row { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.875rem 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); font-size: 0.875rem; }
+.fu-row-main { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem 0.75rem; flex-wrap: wrap; }
+.fu-plate-tag { align-self: flex-start; padding: 0.0625rem 0.5rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.04em; white-space: nowrap; background: var(--color-surface-2); color: var(--color-text-base); }
+.fu-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.75rem; }
+.fu-summary:empty { display: none; }
+.fu-stat { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.875rem 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.fu-stat b { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+.fu-stat.is-total { border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border)); background: var(--color-primary-soft); }
+@media (max-width: 380px) { .fu-grid { grid-template-columns: 1fr; } }
+/* Accueil employé : raccourci « J'ai fait le plein » */
+#page-content .fu-shortcut {
+    display: flex; align-items: center; gap: 0.75rem; width: 100%; margin-top: 0.75rem !important; padding: 0.75rem 1rem; text-align: left;
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+    color: var(--color-text-base); font: inherit; cursor: pointer;
+}
+#page-content .fu-shortcut:hover { border-color: var(--color-primary); }
+.fu-shortcut svg { width: 24px; height: 24px; flex: none; color: var(--color-primary); }
+.fu-shortcut span { display: flex; flex-direction: column; min-width: 0; }
+.fu-shortcut b { font-size: 0.9375rem; }
+.fu-shortcut small { font-size: 0.8125rem; color: var(--color-text-muted); }

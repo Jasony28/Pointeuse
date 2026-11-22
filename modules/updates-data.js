@@ -1,5 +1,13 @@
 export const updatesLog = [
     {
+        version: 'v2.3.0',
+        date: '22 novembre 2026',
+        changes: [
+            "**Carburant** : nouvelle page « Carburant » dans le menu (et bouton « J'ai fait le plein » sur l'accueil). Notez chaque plein : date, plaque de la voiture, litres, prix payé et photo de la pompe ou du ticket.",
+            "**Rapport trajets** (admin) : coût carburant estimé d'après les km et le prix moyen du diesel et de l'essence en Belgique de la semaine, et liste des pleins notés avec leurs photos et le total par voiture.",
+        ]
+    },
+    {
         version: 'v2.2.0',
         date: '15 novembre 2026',
         changes: [

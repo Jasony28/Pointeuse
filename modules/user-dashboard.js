@@ -26,6 +26,10 @@ export async function render() {
                 <div class="manual-entry-link">
                     <button id="openManualPointageBtn" type="button" class="link">Oubli de pointage ? Ajouter des heures manuellement</button>
                 </div>
+                <button type="button" id="fuelShortcut" class="fu-shortcut">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 22h12M4 22V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v17M4 10h10M14 13h2a2 2 0 0 1 2 2v2.5a1.5 1.5 0 0 0 3 0V9l-3-3"/></svg>
+                    <span><b>J'ai fait le plein</b><small>Noter les litres, le prix et la photo du ticket</small></span>
+                </button>
             </div>
 
             <div id="missed-pointage-suggestions" class="space-y-4"></div>
@@ -148,6 +152,7 @@ export async function render() {
         }
         // ----------------------------------------------------------------------
 
+        if (e.target.closest('#fuelShortcut')) { navigateTo('user-fuel'); return; }
         if (e.target.id === 'prevWeekBtn') { currentWeekOffset--; displayWeekView(); }
         if (e.target.id === 'nextWeekBtn') { currentWeekOffset++; displayWeekView(); }
         if (e.target.id === 'cancelStartPointage') document.getElementById('startPointageModal').classList.add('hidden');
