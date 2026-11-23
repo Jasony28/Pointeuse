@@ -3738,6 +3738,7 @@ html.cat .toast > svg { display: none; }
 }
 .chat-person:hover { background: var(--color-surface-2); }
 .chat-person > span:not(.chat-check) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-person-name small { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--color-text-muted); font-size: 0.75rem; font-weight: 400; }
 .chat-check {
     width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
     border: 2px solid var(--color-border-strong); border-radius: 999px; color: transparent; font-size: 0.75rem; font-weight: 700;

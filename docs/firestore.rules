@@ -41,38 +41,79 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // 3. MESSAGERIE : discussions à deux et groupes, réservées à leurs membres.
-    //    Seuls les admins d'un groupe changent ses membres ; chacun peut le quitter.
+    // 3. MESSAGERIE PAR PROFIL : discussions à deux et groupes entre profils (deux profils d'un même compte
+    //    peuvent s'écrire). « members » = clés des profils « uid__nom-du-profil », « participants » = uid des comptes
+    //    correspondants : Firestore ne connaît que le compte connecté, c'est donc lui qui est vérifié ici ;
+    //    l'appli n'affiche ensuite que les discussions du profil actif.
+    //    Anciennes discussions (sans « members ») : membres = comptes, comme avant.
+    //    Seuls les admins d'un groupe (« adminAccounts », ou « admins » pour les anciens) changent ses membres ;
+    //    chacun peut le quitter.
     match /chats/{chatId} {
       function members() { return resource.data.participants; }
+      function ownKey(key) { return key is string && key.matches('^' + request.auth.uid + '__.+'); }
       function sameMembers() {
         return request.resource.data.participants == resource.data.participants
+            && request.resource.data.get('members', null) == resource.data.get('members', null)
             && request.resource.data.get('admins', []) == resource.data.get('admins', [])
+            && request.resource.data.get('adminAccounts', []) == resource.data.get('adminAccounts', [])
             && request.resource.data.get('name', null) == resource.data.get('name', null);
       }
-      function groupAdmin() { return request.auth.uid in resource.data.get('admins', []); }
-      // Quitter : seul soi-même disparaît des membres (et des admins), personne n'est ajouté
-      function leaving() {
-        return resource.data.get('type', 'direct') == 'group'
+      function groupAdmin() {
+        return request.auth.uid in resource.data.get('adminAccounts', [])
+            || (!('members' in resource.data) && request.auth.uid in resource.data.get('admins', []));
+      }
+      function sameAdmins() {
+        return request.resource.data.get('admins', []) == resource.data.get('admins', [])
+            && request.resource.data.get('adminAccounts', []) == resource.data.get('adminAccounts', [])
+            && request.resource.data.get('name', null) == resource.data.get('name', null);
+      }
+      // Quitter (ancien format) : seul son compte disparaît des membres, personne n'est ajouté
+      function leavingLegacy() {
+        return !('members' in resource.data)
             && resource.data.participants.toSet().difference(request.resource.data.participants.toSet()) == [request.auth.uid].toSet()
             && request.resource.data.participants.toSet().difference(resource.data.participants.toSet()).size() == 0
             && request.resource.data.get('admins', []).toSet().difference(resource.data.get('admins', []).toSet()).size() == 0;
       }
+      // Quitter (par profil) : seul le profil « leftBy », un profil de ce compte, disparaît des membres ;
+      // le compte disparaît des participants seulement s'il n'y garde aucun autre profil
+      function leavingProfile() {
+        return ('members' in resource.data)
+            && ownKey(request.resource.data.get('leftBy', null))
+            && request.resource.data.leftBy in resource.data.members
+            && request.resource.data.members.toSet() == resource.data.members.toSet().difference([request.resource.data.leftBy].toSet())
+            && (request.resource.data.participants.toSet() == resource.data.participants.toSet()
+                || request.resource.data.participants.toSet() == resource.data.participants.toSet().difference([request.auth.uid].toSet()))
+            && sameAdmins();
+      }
+      function leaving() {
+        return resource.data.get('type', 'direct') == 'group' && (leavingLegacy() || leavingProfile());
+      }
       allow read: if isApproved() && request.auth.uid in members();
       allow create: if isApproved() && request.auth.uid in request.resource.data.participants
+                    && request.resource.data.members is list
+                    && request.resource.data.members.size() >= 2
                     && (request.resource.data.get('type', 'direct') != 'group'
-                        || (request.resource.data.createdBy == request.auth.uid && request.resource.data.admins == [request.auth.uid]));
+                        || (request.resource.data.createdBy == request.auth.uid
+                            && request.resource.data.adminAccounts == [request.auth.uid]
+                            && request.resource.data.admins.size() == 1
+                            && ownKey(request.resource.data.admins[0])));
       allow update: if isApproved() && request.auth.uid in members() && (sameMembers() || groupAdmin() || leaving());
 
       match /messages/{messageId} {
         function chatMember() {
           return request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
         }
+        // Le profil auteur (senderKey) doit être un profil du compte connecté
+        function validSender() {
+          return request.resource.data.senderId == request.auth.uid
+              && (!('senderKey' in request.resource.data) || ownKey(request.resource.data.senderKey));
+        }
         allow read: if isApproved() && chatMember();
-        allow create: if isApproved() && chatMember() && request.resource.data.senderId == request.auth.uid;
+        allow create: if isApproved() && chatMember() && validSender();
         // Modifier ou supprimer : l'auteur seulement ; réagir (👍…) : tout membre
         allow update: if isApproved() && chatMember() && (
-                         (resource.data.senderId == request.auth.uid && request.resource.data.senderId == request.auth.uid)
+                         (resource.data.senderId == request.auth.uid && validSender()
+                          && request.resource.data.get('senderKey', null) == resource.data.get('senderKey', null))
                       || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']));
       }
     }
