@@ -3,6 +3,7 @@ import { db, currentUser, pageContent, showInfoModal, navigateTo } from "../app.
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getActiveChantiers } from "./data-service.js";
 import { getUnreadRetours } from './retours-clients.js';
+import { isMyChat, myChatKey, memberKeys } from './chat-keys.js';
 
 let timerInterval = null;
 let chantiersCache = [];
@@ -784,14 +785,17 @@ function initUnreadMessagesListener() {
 
         snapshot.forEach(doc => {
             const data = doc.data();
-            if (data.hiddenFor && data.hiddenFor.includes(currentUser.uid)) return;
-            if (data.mutedBy && data.mutedBy.includes(currentUser.uid)) return; // discussion en sourdine
-            const myUnreadCount = (data.unreadCounts && data.unreadCounts[currentUser.uid]) ? data.unreadCounts[currentUser.uid] : 0;
+            // Messagerie par profil : seulement les discussions du profil actif (les anciennes restent partagées par le compte)
+            if (!isMyChat(data, currentUser.uid, activeProfileName)) return;
+            const myKey = myChatKey(data, currentUser.uid, activeProfileName);
+            if (data.hiddenFor && data.hiddenFor.includes(myKey)) return;
+            if (data.mutedBy && data.mutedBy.includes(myKey)) return; // discussion en sourdine
+            const myUnreadCount = data.unreadCounts?.[myKey] || 0;
             if (myUnreadCount > 0) {
                 totalUnread += myUnreadCount;
-                const otherId = (data.participants || []).find(id => id !== currentUser.uid);
+                const otherKey = memberKeys(data).find(k => k !== myKey);
                 const otherName = data.type === 'group' ? (data.name || 'Groupe')
-                    : (data.memberNames?.[otherId] || (data.participantNames || []).find(n => n !== activeProfileName && n !== currentUser.displayName) || 'Collègue');
+                    : (data.memberNames?.[otherKey] || (data.participantNames || []).find(n => n !== activeProfileName && n !== currentUser.displayName) || 'Collègue');
                 senders.add(otherName);
                 lastMessagePreview = data.lastMessage || '';
             }

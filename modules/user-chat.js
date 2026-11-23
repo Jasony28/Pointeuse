@@ -1,4 +1,6 @@
 // Messagerie : conversations à deux et groupes, réponses, réactions, messages modifiables, « Vu », mentions @.
+// Chaque PROFIL est un membre (voir chat-keys.js) : deux profils d'un même compte peuvent s'écrire,
+// et un message envoyé à Thomas n'apparaît pas chez Julie, même s'ils partagent le compte.
 // Quota Firebase gratuit : seuls les 40 derniers messages sont écoutés en direct, les plus anciens à la demande.
 import { db, currentUser, showConfirmationModal, showInfoModal, showToast, getActiveProfileName } from '../app.js';
 import {
@@ -7,6 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getUsers } from './data-service.js';
 import { escapeHTML } from './html-utils.js';
+import { profileKey, uidOfKey, isProfileChat, memberKeys, myChatKey, isMyChat, profileDirectory } from './chat-keys.js';
 
 const PAGE_SIZE = 40;
 const MAX_LENGTH = 2000;
@@ -23,7 +26,7 @@ const state = {
     replyTo: null,
     editing: null,
     search: '',
-    users: [],
+    people: [],           // tous les profils des comptes validés (annuaire)
     redrawInfo: null,     // fenêtre « Infos » ouverte, redessinée à chaque changement de la conversation
 };
 let conversationsListener = null;
@@ -47,8 +50,14 @@ export function cleanup() {
 
 /* ------------------------------------------------------------------ Outils */
 
-const me = () => currentUser.uid;
-const myName = () => currentUser.displayName || currentUser.email || 'Moi';
+const me = () => currentUser.uid; // le compte (règles Firestore)
+const myName = () => getActiveProfileName() || currentUser.displayName || currentUser.email || 'Moi';
+const myProfileKey = () => profileKey(me(), myName());
+/** Ma clé dans la discussion : le profil actif (ou le compte pour une ancienne discussion) */
+const meIn = (chat) => myChatKey(chat, me(), myName());
+/** Auteur d'un message : profil (nouveau format) ou compte (anciens messages) */
+const senderKeyOf = (m) => m.senderKey || m.senderId;
+const uniq = (list) => [...new Set(list)];
 const initials = (name) => String(name || '?').trim().split(/\s+/).map(p => p[0]).join('').slice(0, 2).toUpperCase() || '?';
 const colorFor = (key) => AVATAR_COLORS[[...String(key || '')].reduce((s, c) => s + c.charCodeAt(0), 0) % AVATAR_COLORS.length];
 const toDate = (ts) => ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
@@ -56,19 +65,25 @@ const isGroup = (chat) => chat?.type === 'group';
 const activeChat = () => state.chats.find(c => c.id === state.activeId) || null;
 const preview = (text, max = 80) => { const t = String(text || '').replace(/\s+/g, ' ').trim(); return t.length > max ? `${t.slice(0, max)}…` : t; };
 
-/** Nom d'un participant (nouveau format memberNames, ou ancien tableau participantNames aligné sur participants) */
-function nameOf(chat, uid) {
-    if (uid === me()) return myName();
-    if (chat?.memberNames?.[uid]) return chat.memberNames[uid];
-    const i = (chat?.participants || []).indexOf(uid);
+/** Nom d'un membre (clé de profil, ou uid pour une ancienne discussion) */
+function nameOf(chat, key) {
+    if (key === meIn(chat)) return myName();
+    if (chat?.memberNames?.[key]) return chat.memberNames[key];
+    const i = (chat?.participants || []).indexOf(key);
     if (i >= 0 && chat.participantNames?.[i]) return chat.participantNames[i];
-    return state.users.find(u => u.id === uid)?.displayName || 'Ancien membre';
+    return state.people.find(p => p.key === key)?.name || state.people.find(p => p.uid === key)?.account || 'Ancien membre';
 }
 
 function chatTitle(chat) {
     if (isGroup(chat)) return chat.name || 'Groupe';
-    const other = (chat.participants || []).find(id => id !== me());
+    const other = memberKeys(chat).find(k => k !== meIn(chat));
     return other ? nameOf(chat, other) : myName();
+}
+
+/** Champs de composition d'un groupe : profils + comptes correspondants (pour les règles Firestore) */
+function membershipFields(chat, members, admins) {
+    if (!isProfileChat(chat)) return { participants: members, admins };
+    return { members, participants: uniq(members.map(uidOfKey)), admins, adminAccounts: uniq(admins.map(uidOfKey)) };
 }
 
 function avatarHTML(label, key, group = false, size = '') {
@@ -100,7 +115,7 @@ function dayLabel(date) {
 function formatText(text, chat) {
     let html = escapeHTML(text).replace(/\n/g, '<br>');
     html = html.replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
-    const names = (chat?.participants || []).map(uid => nameOf(chat, uid)).filter(Boolean).sort((a, b) => b.length - a.length);
+    const names = memberKeys(chat).map(k => nameOf(chat, k)).filter(Boolean).sort((a, b) => b.length - a.length);
     for (const name of names) {
         const safe = escapeHTML(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         html = html.replace(new RegExp(`@${safe}`, 'g'), `<span class="chat-mention${name === myName() ? ' is-me' : ''}">@${escapeHTML(name)}</span>`);
@@ -153,7 +168,8 @@ export async function render(params = {}) {
         </div>
         <div id="chat-modal" class="modal hidden"></div>
     `;
-    getUsers().then(users => { state.users = users.filter(u => u.status === 'approved'); }).catch(console.error);
+    state.people = []; // annuaire relu à chaque ouverture (nouveaux profils)
+    loadPeople().then(() => { renderConversations(); if (activeChat()) renderHeader(activeChat()); }).catch(console.error);
     setupEventListeners();
     loadConversations();
     // Ouverte depuis une notification : directement sur la discussion
@@ -192,13 +208,15 @@ function loadConversations() {
     if (conversationsListener) conversationsListener();
     const q = query(collection(db, "chats"), where("participants", "array-contains", me()), orderBy("lastMessageTime", "desc"));
     conversationsListener = onSnapshot(q, (snapshot) => {
-        state.chats = snapshot.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
+        // Le compte reçoit les discussions de tous ses profils : on ne garde que celles du profil actif
+        state.chats = snapshot.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))
+            .filter(chat => isMyChat(chat, me(), myName()));
         renderConversations();
         // Fenêtre « Infos » ouverte : elle suit les changements (membre ajouté, sourdine…)
         if (state.redrawInfo && !document.getElementById('chat-modal')?.classList.contains('hidden')) state.redrawInfo();
         if (state.activeId) {
             const chat = activeChat();
-            if (!chat) { closeChat(); return; } // retiré du groupe
+            if (!chat) { closeChat(); return; } // retiré du groupe, ou discussion d'un autre profil
             renderHeader(chat);
             renderMessages(false);
         }
@@ -212,20 +230,22 @@ function renderConversations() {
     const container = document.getElementById('conversations-container');
     if (!container) return;
     const visible = state.chats
-        .filter(c => !(c.hiddenFor || []).includes(me()))
+        .filter(c => !(c.hiddenFor || []).includes(meIn(c)))
         .filter(c => !state.search || chatTitle(c).toLowerCase().includes(state.search) || String(c.lastMessage || '').toLowerCase().includes(state.search))
-        .sort((a, b) => Number((b.pinnedBy || []).includes(me())) - Number((a.pinnedBy || []).includes(me())));
+        .sort((a, b) => Number((b.pinnedBy || []).includes(meIn(b))) - Number((a.pinnedBy || []).includes(meIn(a))));
     if (!visible.length) {
         container.innerHTML = `<p class="chat-empty">${state.search ? 'Aucune discussion trouvée.' : 'Aucune discussion pour l\'instant.<br>Touchez + pour écrire à un collègue ou créer un groupe.'}</p>`;
         return;
     }
     container.innerHTML = visible.map(chat => {
-        const unread = chat.unreadCounts?.[me()] || 0;
-        const muted = (chat.mutedBy || []).includes(me());
-        const pinned = (chat.pinnedBy || []).includes(me());
+        const mine = meIn(chat);
+        const unread = chat.unreadCounts?.[mine] || 0;
+        const muted = (chat.mutedBy || []).includes(mine);
+        const pinned = (chat.pinnedBy || []).includes(mine);
         const title = chatTitle(chat);
-        const sender = chat.lastSenderId && chat.lastMessage
-            ? (chat.lastSenderId === me() ? 'Vous : ' : isGroup(chat) ? `${preview(nameOf(chat, chat.lastSenderId).split(' ')[0], 20)} : ` : '')
+        const lastSender = chat.lastSenderKey || chat.lastSenderId;
+        const sender = lastSender && chat.lastMessage
+            ? (lastSender === mine ? 'Vous : ' : isGroup(chat) ? `${preview((chat.lastSenderName || nameOf(chat, lastSender)).split(' ')[0], 20)} : ` : '')
             : '';
         return `
             <button type="button" class="chat-conv${chat.id === state.activeId ? ' is-active' : ''}${unread ? ' is-unread' : ''}" data-chat="${escapeHTML(chat.id)}">
@@ -236,7 +256,7 @@ function renderConversations() {
                         <span class="chat-conv-time">${timeLabel(toDate(chat.lastMessageTime))}</span>
                     </span>
                     <span class="chat-conv-bottom">
-                        <span class="chat-conv-last">${escapeHTML(sender + preview(chat.lastMessage || (isGroup(chat) ? `${(chat.participants || []).length} membres` : 'Nouvelle discussion')))}</span>
+                        <span class="chat-conv-last">${escapeHTML(sender + preview(chat.lastMessage || (isGroup(chat) ? `${memberKeys(chat).length} membres` : 'Nouvelle discussion')))}</span>
                         ${pinned ? '<span class="chat-flag" title="Épinglée">📌</span>' : ''}
                         ${muted ? '<span class="chat-flag" title="Sourdine">🔕</span>' : ''}
                         ${unread ? `<span class="chat-badge${muted ? ' is-muted' : ''}">${unread > 99 ? '99+' : unread}</span>` : ''}
@@ -272,7 +292,7 @@ function openChat(chatId) {
         state.messages = snapshot.docs.map(d => ({ id: d.id, _doc: d, ...d.data({ serverTimestamps: 'estimate' }) }));
         if (first) { state.hasOlder = snapshot.size >= PAGE_SIZE; first = false; }
         renderMessages(true);
-        if (snapshot.docChanges().some(c => c.type === 'added' && c.doc.data().senderId !== me())) scheduleRead();
+        if (snapshot.docChanges().some(c => c.type === 'added' && senderKeyOf(c.doc.data()) !== meIn(activeChat()))) scheduleRead();
     }, (error) => {
         console.error(error);
         document.getElementById('messages-area').innerHTML = '<p class="chat-empty is-error">Impossible de charger les messages.</p>';
@@ -295,15 +315,16 @@ function scheduleRead() { clearTimeout(readTimer); readTimer = setTimeout(markRe
 function markRead() {
     const chat = activeChat();
     if (!chat || document.hidden) return;
-    updateDoc(doc(db, "chats", chat.id), { [`unreadCounts.${me()}`]: 0, [`readAt.${me()}`]: serverTimestamp() }).catch(console.warn);
+    const mine = meIn(chat);
+    updateDoc(doc(db, "chats", chat.id), { [`unreadCounts.${mine}`]: 0, [`readAt.${mine}`]: serverTimestamp() }).catch(console.warn);
 }
 
 function renderHeader(chat) {
     const header = document.getElementById('chat-header');
     const group = isGroup(chat);
     const sub = group
-        ? (chat.participants || []).map(uid => uid === me() ? 'vous' : nameOf(chat, uid).split(' ')[0]).join(', ')
-        : 'Discussion privée';
+        ? memberKeys(chat).map(k => k === meIn(chat) ? 'vous' : nameOf(chat, k).split(' ')[0]).join(', ')
+        : isProfileChat(chat) ? 'Discussion privée' : 'Ancienne discussion, partagée par les profils du compte';
     header.innerHTML = `
         <button type="button" class="chat-icon-btn chat-back" id="back-to-list" aria-label="Retour aux discussions">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
@@ -330,7 +351,7 @@ function renderMessages(fromSnapshot) {
         area.innerHTML = `<p class="chat-empty">${isGroup(chat) ? 'Le groupe est prêt. Écrivez le premier message !' : 'Dites bonjour 👋'}</p>`;
         return;
     }
-    const lastMine = [...all].reverse().find(m => m.senderId === me() && m.type !== 'system' && !m.deleted);
+    const lastMine = [...all].reverse().find(m => isMine(m, chat) && m.type !== 'system' && !m.deleted);
     let html = state.hasOlder ? '<button type="button" class="chat-load-older" id="load-older">Messages précédents</button>' : '';
     let prevDay = '', prev = null;
     for (const m of all) {
@@ -338,8 +359,8 @@ function renderMessages(fromSnapshot) {
         const day = date.toDateString();
         if (day !== prevDay) { html += `<div class="chat-day"><span>${escapeHTML(dayLabel(date))}</span></div>`; prevDay = day; prev = null; }
         if (m.type === 'system') { html += `<div class="chat-system">${escapeHTML(m.text)}</div>`; prev = null; continue; }
-        const mine = m.senderId === me();
-        const grouped = prev && prev.senderId === m.senderId && (prev.senderProfile || '') === (m.senderProfile || '') && date - (toDate(prev.createdAt) || date) < 5 * 60000;
+        const mine = isMine(m, chat);
+        const grouped = prev && senderKeyOf(prev) === senderKeyOf(m) && (prev.senderProfile || '') === (m.senderProfile || '') && date - (toDate(prev.createdAt) || date) < 5 * 60000;
         html += messageHTML(m, chat, mine, grouped, date, m === lastMine);
         prev = m;
     }
@@ -359,12 +380,17 @@ function renderMessages(fromSnapshot) {
     area.dataset.ready = '1';
 }
 
+/** Message écrit par le profil actif (ancienne discussion : par le compte) */
+function isMine(m, chat) { return senderKeyOf(m) === meIn(chat); }
+
 function messageHTML(m, chat, mine, grouped, date, isLastMine) {
     const group = isGroup(chat);
-    // Compte partagé : le message garde le profil qui l'a écrit (senderProfile)
-    const sender = m.senderProfile || nameOf(chat, m.senderId);
-    const otherProfileOfMine = mine && m.senderProfile && m.senderProfile.trim().toLowerCase() !== getActiveProfileName().trim().toLowerCase();
-    const showSender = !grouped && ((!mine && (group || (m.senderProfile && m.senderProfile !== nameOf(chat, m.senderId)))) || otherProfileOfMine);
+    const key = senderKeyOf(m);
+    // Le message garde le profil qui l'a écrit (senderProfile)
+    const sender = m.senderProfile || nameOf(chat, key);
+    // Ancienne discussion partagée par le compte : message d'un autre profil du même compte
+    const otherProfileOfMine = mine && !isProfileChat(chat) && m.senderProfile && m.senderProfile.trim().toLowerCase() !== myName().trim().toLowerCase();
+    const showSender = !grouped && ((!mine && (group || (m.senderProfile && m.senderProfile !== nameOf(chat, key)))) || otherProfileOfMine);
     const reactions = Object.entries(m.reactions || {}).filter(([k, uids]) => REACTIONS[k] && uids?.length);
     const quote = m.replyTo && !m.deleted ? `
         <div class="chat-quote" data-target="${escapeHTML(m.replyTo.id)}">
@@ -374,22 +400,23 @@ function messageHTML(m, chat, mine, grouped, date, isLastMine) {
     let seen = '';
     if (isLastMine) {
         const created = toDate(m.createdAt);
-        const readers = (chat.participants || []).filter(uid => uid !== me() && toDate(chat.readAt?.[uid]) >= created);
-        if (group) seen = readers.length ? `Vu par ${readers.length === chat.participants.length - 1 ? 'tout le monde' : readers.map(uid => nameOf(chat, uid).split(' ')[0]).join(', ')}` : 'Envoyé';
+        const others = memberKeys(chat).filter(k => k !== meIn(chat));
+        const readers = others.filter(k => toDate(chat.readAt?.[k]) >= created);
+        if (group) seen = readers.length ? `Vu par ${readers.length === others.length ? 'tout le monde' : readers.map(k => nameOf(chat, k).split(' ')[0]).join(', ')}` : 'Envoyé';
         else seen = readers.length ? 'Vu' : 'Envoyé';
     }
     return `
         <div class="chat-row${mine ? ' is-mine' : ''}${grouped ? ' is-grouped' : ''}" id="msg-${escapeHTML(m.id)}">
-            ${!mine && group ? (grouped ? '<span class="chat-avatar-space"></span>' : avatarHTML(sender, m.senderId, false, 'is-sm')) : ''}
+            ${!mine && group ? (grouped ? '<span class="chat-avatar-space"></span>' : avatarHTML(sender, key, false, 'is-sm')) : ''}
             <div class="chat-bubble-wrap">
-                ${showSender ? `<span class="chat-sender" style="color:${colorFor(m.senderId)}">${escapeHTML(sender)}</span>` : ''}
+                ${showSender ? `<span class="chat-sender" style="color:${colorFor(key)}">${escapeHTML(sender)}</span>` : ''}
                 <div class="chat-bubble${m.deleted ? ' is-deleted' : ''}" data-msg="${escapeHTML(m.id)}" data-menu-trigger tabindex="0">
                     ${quote}
                     <div class="chat-text">${m.deleted ? 'Message supprimé' : formatText(m.text, chat)}</div>
                     <span class="chat-meta">${m.editedAt && !m.deleted ? 'modifié · ' : ''}${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 ${reactions.length ? `<div class="chat-reactions">${reactions.map(([k, uids]) => `
-                    <button type="button" class="chat-reaction${uids.includes(me()) ? ' is-mine' : ''}" data-id="${escapeHTML(m.id)}" data-key="${k}" title="${escapeHTML(uids.map(uid => nameOf(chat, uid)).join(', '))}">${REACTIONS[k]} ${uids.length}</button>`).join('')}</div>` : ''}
+                    <button type="button" class="chat-reaction${uids.includes(meIn(chat)) ? ' is-mine' : ''}" data-id="${escapeHTML(m.id)}" data-key="${k}" title="${escapeHTML(uids.map(id => nameOf(chat, id)).join(', '))}">${REACTIONS[k]} ${uids.length}</button>`).join('')}</div>` : ''}
                 ${seen ? `<span class="chat-seen">${escapeHTML(seen)}</span>` : ''}
             </div>
         </div>`;
@@ -421,7 +448,7 @@ function openMessageMenu(id, anchor) {
     closeMenus();
     const m = findMessage(id);
     if (!m || m.deleted) return;
-    const mine = m.senderId === me();
+    const mine = isMine(m, activeChat());
     const menu = document.createElement('div');
     menu.className = 'chat-menu';
     menu.innerHTML = `
@@ -446,9 +473,10 @@ async function toggleReaction(id, key) {
     const chat = activeChat();
     const m = findMessage(id);
     if (!chat || !m || !REACTIONS[key]) return;
-    const has = (m.reactions?.[key] || []).includes(me());
+    const mine = meIn(chat);
+    const has = (m.reactions?.[key] || []).includes(mine);
     try {
-        await updateDoc(doc(db, `chats/${chat.id}/messages`, id), { [`reactions.${key}`]: has ? arrayRemove(me()) : arrayUnion(me()) });
+        await updateDoc(doc(db, `chats/${chat.id}/messages`, id), { [`reactions.${key}`]: has ? arrayRemove(mine) : arrayUnion(mine) });
     } catch (error) { console.error(error); showToast("Réaction non enregistrée.", 'warning'); }
 }
 
@@ -467,7 +495,7 @@ function setComposerContext(kind, m) {
     const box = document.getElementById('composer-context');
     const chat = activeChat();
     box.innerHTML = `
-        <div><strong>${kind === 'reply' ? `Réponse à ${escapeHTML(nameOf(chat, m.senderId))}` : 'Modifier le message'}</strong><span>${escapeHTML(preview(m.text, 100))}</span></div>
+        <div><strong>${kind === 'reply' ? `Réponse à ${escapeHTML(m.senderProfile || nameOf(chat, senderKeyOf(m)))}` : 'Modifier le message'}</strong><span>${escapeHTML(preview(m.text, 100))}</span></div>
         <button type="button" class="chat-icon-btn" aria-label="Annuler">✕</button>`;
     box.classList.remove('hidden');
     box.querySelector('button').onclick = clearComposerContext;
@@ -494,7 +522,7 @@ function updateMentionList() {
     const match = isGroup(chat) && input.value.slice(0, input.selectionStart).match(/@([^\s@]{0,20})$/);
     if (!match) { list.classList.add('hidden'); return; }
     const term = match[1].toLowerCase();
-    const members = chat.participants.filter(uid => uid !== me()).map(uid => nameOf(chat, uid)).filter(n => n.toLowerCase().includes(term)).slice(0, 6);
+    const members = memberKeys(chat).filter(k => k !== meIn(chat)).map(k => nameOf(chat, k)).filter(n => n.toLowerCase().includes(term)).slice(0, 6);
     if (!members.length) { list.classList.add('hidden'); return; }
     list.innerHTML = members.map(n => `<button type="button" data-name="${escapeHTML(n)}">${avatarHTML(n, n, false, 'is-xs')} ${escapeHTML(n)}</button>`).join('');
     list.classList.remove('hidden');
@@ -535,8 +563,8 @@ async function submitMessage() {
     input.value = ''; autoGrow(input);
     try {
         await sendToChat(chat, {
-            text, senderId: me(), senderProfile: getActiveProfileName() || myName(), createdAt: serverTimestamp(), deleted: false,
-            ...(reply ? { replyTo: { id: reply.id, text: preview(reply.text, 200), senderName: reply.senderProfile || nameOf(chat, reply.senderId) } } : {}),
+            text, ...author(chat), createdAt: serverTimestamp(), deleted: false,
+            ...(reply ? { replyTo: { id: reply.id, text: preview(reply.text, 200), senderName: reply.senderProfile || nameOf(chat, senderKeyOf(reply)) } } : {}),
         });
     } catch (error) {
         console.error("Erreur envoi:", error);
@@ -545,34 +573,61 @@ async function submitMessage() {
     }
 }
 
+/** Auteur d'un message : le compte (vérifié par les règles) et le profil qui écrit */
+function author(chat) {
+    return isProfileChat(chat)
+        ? { senderId: me(), senderKey: meIn(chat), senderProfile: myName() }
+        : { senderId: me(), senderProfile: myName() };
+}
+
 /** Message + mise à jour de la conversation (aperçu, non-lus des autres) en une seule écriture groupée */
 async function sendToChat(chat, message) {
     const batch = writeBatch(db);
+    const mine = meIn(chat);
+    const system = message.type === 'system';
     batch.set(doc(collection(db, `chats/${chat.id}/messages`)), message);
     const update = {
-        lastMessage: message.type === 'system' ? message.text : preview(message.text, 120),
-        lastSenderId: message.type === 'system' ? null : me(), // pas de « Vous : » devant « X a ajouté Y »
+        lastMessage: system ? message.text : preview(message.text, 120),
+        // pas de « Vous : » devant « X a ajouté Y »
+        lastSenderId: system ? null : me(),
+        lastSenderKey: system ? null : mine,
+        lastSenderName: system ? null : myName(),
         lastMessageTime: serverTimestamp(),
         hiddenFor: [],
-        [`readAt.${me()}`]: serverTimestamp(),
+        [`readAt.${mine}`]: serverTimestamp(),
     };
-    if (message.type !== 'system') for (const uid of chat.participants) if (uid !== me()) update[`unreadCounts.${uid}`] = increment(1);
+    if (!system) for (const k of memberKeys(chat)) if (k !== mine) update[`unreadCounts.${k}`] = increment(1);
     batch.update(doc(db, "chats", chat.id), update);
     await batch.commit();
 }
 
-const systemMessage = (text) => ({ type: 'system', text, senderId: me(), createdAt: serverTimestamp(), deleted: false });
+const systemMessage = (chat, text) => ({ type: 'system', text, ...author(chat), createdAt: serverTimestamp(), deleted: false });
 
 /* ------------------------------------------------------------------ Nouvelle discussion / nouveau groupe */
 
-async function loadApprovedUsers() {
-    if (!state.users.length) state.users = (await getUsers().catch(() => [])).filter(u => u.status === 'approved');
-    return state.users;
+/** Annuaire : tous les profils de tous les comptes validés */
+async function loadPeople() {
+    if (!state.people.length) state.people = profileDirectory(await getUsers().catch(() => []));
+    return state.people;
 }
+
+/** Ligne d'un profil dans les listes de choix (le compte est rappelé quand il a plusieurs profils) */
+function personHTML(p, selected = false) {
+    const account = p.accountProfiles > 1 && p.account && p.account !== p.name ? `<small>Compte ${escapeHTML(p.account)}</small>` : '';
+    return `
+        <button type="button" class="chat-person${selected ? ' is-selected' : ''}" data-key="${escapeHTML(p.key)}">
+            ${avatarHTML(p.name, p.key)}
+            <span class="chat-person-name">${escapeHTML(p.name)}${account}</span>
+            <span class="chat-check" aria-hidden="true">✓</span>
+        </button>`;
+}
+
+const matchesPerson = (p, term) => !term || `${p.name} ${p.account}`.toLowerCase().includes(term);
 
 async function openNewChatModal(mode = 'direct') {
     const modal = document.getElementById('chat-modal');
-    const others = (await loadApprovedUsers()).filter(u => u.id !== me()).sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '', 'fr'));
+    const mine = myProfileKey();
+    const others = (await loadPeople()).filter(p => p.key !== mine);
     const selected = new Set();
     modal.innerHTML = `
         <div class="modal-panel chat-modal-panel" role="dialog" aria-modal="true" aria-labelledby="chat-modal-title">
@@ -611,18 +666,13 @@ async function openNewChatModal(mode = 'direct') {
     };
     const drawPeople = () => {
         const term = modal.querySelector('#people-search').value.trim().toLowerCase();
-        const people = others.filter(u => (u.displayName || u.email || '').toLowerCase().includes(term));
-        list.innerHTML = people.length ? people.map(u => `
-            <button type="button" class="chat-person${selected.has(u.id) ? ' is-selected' : ''}" data-uid="${escapeHTML(u.id)}">
-                ${avatarHTML(u.displayName, u.id)}
-                <span>${escapeHTML(u.displayName || u.email)}</span>
-                <span class="chat-check" aria-hidden="true">✓</span>
-            </button>`).join('') : '<p class="chat-empty">Personne trouvé.</p>';
-        list.querySelectorAll('[data-uid]').forEach(b => {
+        const people = others.filter(p => matchesPerson(p, term));
+        list.innerHTML = people.length ? people.map(p => personHTML(p, selected.has(p.key))).join('') : '<p class="chat-empty">Personne trouvé.</p>';
+        list.querySelectorAll('[data-key]').forEach(b => {
             b.onclick = () => {
-                const u = others.find(x => x.id === b.dataset.uid);
-                if (panel.dataset.mode === 'direct') { modal.classList.add('hidden'); startConversation(u); return; }
-                selected.has(u.id) ? selected.delete(u.id) : selected.add(u.id);
+                const person = others.find(p => p.key === b.dataset.key);
+                if (panel.dataset.mode === 'direct') { modal.classList.add('hidden'); startConversation(person); return; }
+                selected.has(person.key) ? selected.delete(person.key) : selected.add(person.key);
                 b.classList.toggle('is-selected');
                 refresh();
             };
@@ -639,14 +689,14 @@ async function openNewChatModal(mode = 'direct') {
     modal.querySelector('#people-search').oninput = drawPeople;
     nameInput.oninput = refresh;
     modal.querySelector('#select-all').onclick = () => {
-        const all = others.every(u => selected.has(u.id));
-        others.forEach(u => all ? selected.delete(u.id) : selected.add(u.id));
+        const all = others.every(p => selected.has(p.key));
+        others.forEach(p => all ? selected.delete(p.key) : selected.add(p.key));
         drawPeople(); refresh();
     };
     createBtn.onclick = async () => {
         createBtn.disabled = true;
         try {
-            const id = await createGroup(nameInput.value.trim(), [...selected].map(uid => others.find(u => u.id === uid)));
+            const id = await createGroup(nameInput.value.trim(), others.filter(p => selected.has(p.key)));
             modal.classList.add('hidden');
             openChat(id);
         } catch (error) {
@@ -658,18 +708,20 @@ async function openNewChatModal(mode = 'direct') {
     setMode(mode);
 }
 
-async function startConversation(user) {
-    const participants = [me(), user.id].sort();
-    const chatId = participants.join('_');
+/** Discussion à deux entre le profil actif et un autre profil (du même compte ou d'un autre) */
+async function startConversation(person) {
+    const mine = myProfileKey();
+    const members = [mine, person.key].sort();
+    // Identifiant fixe : la même paire de profils retrouve toujours la même discussion
+    const chatId = `p_${members.join('--')}`;
     const existing = state.chats.find(c => c.id === chatId);
     try {
         if (existing) {
-            if ((existing.hiddenFor || []).includes(me())) await updateDoc(doc(db, "chats", chatId), { hiddenFor: arrayRemove(me()) });
+            if ((existing.hiddenFor || []).includes(mine)) await updateDoc(doc(db, "chats", chatId), { hiddenFor: arrayRemove(mine) });
         } else {
             await setDoc(doc(db, "chats", chatId), {
-                type: 'direct', participants,
-                participantNames: participants.map(uid => uid === me() ? myName() : (user.displayName || user.email)),
-                memberNames: { [me()]: myName(), [user.id]: user.displayName || user.email },
+                type: 'direct', members, participants: uniq(members.map(uidOfKey)),
+                memberNames: { [mine]: myName(), [person.key]: person.name },
                 lastMessageTime: serverTimestamp(), hiddenFor: [],
             }, { merge: true });
         }
@@ -680,17 +732,20 @@ async function startConversation(user) {
     }
 }
 
-async function createGroup(name, members) {
-    const participants = [me(), ...members.map(u => u.id)];
-    const memberNames = Object.fromEntries([[me(), myName()], ...members.map(u => [u.id, u.displayName || u.email])]);
+async function createGroup(name, people) {
+    const mine = myProfileKey();
+    const members = [mine, ...people.map(p => p.key)];
+    const memberNames = Object.fromEntries([[mine, myName()], ...people.map(p => [p.key, p.name])]);
     const ref = doc(collection(db, "chats"));
+    const chat = { id: ref.id, type: 'group', members };
     // Le groupe d'abord (les règles vérifient l'appartenance au groupe avant d'accepter un message)
     await setDoc(ref, {
-        type: 'group', name, participants, memberNames, admins: [me()], createdBy: me(), createdAt: serverTimestamp(),
+        type: 'group', name, ...membershipFields(chat, members, [mine]), memberNames,
+        createdBy: me(), createdByKey: mine, createdAt: serverTimestamp(),
         lastMessage: `${myName()} a créé le groupe`, lastSenderId: null, lastMessageTime: serverTimestamp(), hiddenFor: [],
-        readAt: { [me()]: serverTimestamp() },
+        readAt: { [mine]: serverTimestamp() },
     });
-    await setDoc(doc(collection(db, `chats/${ref.id}/messages`)), systemMessage(`${myName()} a créé le groupe « ${name} »`));
+    await setDoc(doc(collection(db, `chats/${ref.id}/messages`)), systemMessage(chat, `${myName()} a créé le groupe « ${name} »`));
     return ref.id;
 }
 
@@ -701,12 +756,15 @@ function openInfoModal(chatId) {
     const draw = () => {
         const chat = state.chats.find(c => c.id === chatId);
         if (!chat) { modal.classList.add('hidden'); return; }
+        const mine = meIn(chat);
         const group = isGroup(chat);
-        const amAdmin = group && (chat.admins || []).includes(me());
-        const muted = (chat.mutedBy || []).includes(me());
-        const pinned = (chat.pinnedBy || []).includes(me());
+        const legacy = !isProfileChat(chat);
         const admins = chat.admins || [];
-        const members = [...chat.participants].sort((a, b) => Number(admins.includes(b)) - Number(admins.includes(a)) || nameOf(chat, a).localeCompare(nameOf(chat, b), 'fr'));
+        const amAdmin = group && admins.includes(mine);
+        const muted = (chat.mutedBy || []).includes(mine);
+        const pinned = (chat.pinnedBy || []).includes(mine);
+        const keys = memberKeys(chat);
+        const members = [...keys].sort((a, b) => Number(admins.includes(b)) - Number(admins.includes(a)) || nameOf(chat, a).localeCompare(nameOf(chat, b), 'fr'));
         modal.innerHTML = `
             <div class="modal-panel chat-modal-panel" role="dialog" aria-modal="true" aria-labelledby="chat-info-title">
                 <div class="modal-body">
@@ -719,22 +777,23 @@ function openInfoModal(chatId) {
                         ${amAdmin
                             ? `<div class="chat-rename"><input id="rename-input" class="input" maxlength="60" value="${escapeHTML(chat.name || '')}" aria-label="Nom du groupe"><button type="button" class="btn btn-secondary" id="rename-btn">Renommer</button></div>`
                             : `<strong>${escapeHTML(chatTitle(chat))}</strong>`}
-                        ${group ? `<small>${chat.participants.length} membres</small>` : ''}
+                        ${group ? `<small>${keys.length} membres</small>` : ''}
+                        ${legacy ? '<small>Ancienne discussion : elle est partagée par tous les profils du compte. Les nouvelles discussions sont propres à chaque profil.</small>' : ''}
                     </div>
                     <div class="chat-toggles">
                         <button type="button" id="toggle-pin">${pinned ? '📌 Désépingler' : '📌 Épingler en haut'}</button>
                         <button type="button" id="toggle-mute">${muted ? '🔔 Réactiver les alertes' : '🔕 Mettre en sourdine'}</button>
                     </div>
                     ${group ? `
-                        <div class="chat-section-title"><span>Membres</span>${amAdmin ? '<button type="button" id="add-members">+ Ajouter</button>' : ''}</div>
-                        <div class="chat-members">${members.map(uid => `
+                        <div class="chat-section-title"><span>Membres</span>${amAdmin && !legacy ? '<button type="button" id="add-members">+ Ajouter</button>' : ''}</div>
+                        <div class="chat-members">${members.map(k => `
                             <div class="chat-member">
-                                ${avatarHTML(nameOf(chat, uid), uid, false, 'is-sm')}
-                                <span>${escapeHTML(nameOf(chat, uid))}${uid === me() ? ' (vous)' : ''}</span>
-                                ${admins.includes(uid) ? '<em>admin</em>' : ''}
-                                ${amAdmin && uid !== me() ? `
-                                    <button type="button" class="chat-member-act" data-admin="${escapeHTML(uid)}">${admins.includes(uid) ? 'Retirer admin' : 'Nommer admin'}</button>
-                                    <button type="button" class="chat-member-act is-danger" data-remove="${escapeHTML(uid)}">Retirer</button>` : ''}
+                                ${avatarHTML(nameOf(chat, k), k, false, 'is-sm')}
+                                <span>${escapeHTML(nameOf(chat, k))}${k === mine ? ' (vous)' : ''}</span>
+                                ${admins.includes(k) ? '<em>admin</em>' : ''}
+                                ${amAdmin && k !== mine ? `
+                                    <button type="button" class="chat-member-act" data-admin="${escapeHTML(k)}">${admins.includes(k) ? 'Retirer admin' : 'Nommer admin'}</button>
+                                    <button type="button" class="chat-member-act is-danger" data-remove="${escapeHTML(k)}">Retirer</button>` : ''}
                             </div>`).join('')}</div>` : ''}
                 </div>
                 <div class="modal-footer">
@@ -746,49 +805,58 @@ function openInfoModal(chatId) {
             </div>`;
         const run = async (fn, errorText) => { try { await fn(); } catch (error) { console.error(error); showToast(errorText, 'warning'); } };
         const ref = doc(db, "chats", chat.id);
-        modal.querySelector('#toggle-pin').onclick = () => run(() => updateDoc(ref, { pinnedBy: pinned ? arrayRemove(me()) : arrayUnion(me()) }), "Réglage non enregistré.");
-        modal.querySelector('#toggle-mute').onclick = () => run(() => updateDoc(ref, { mutedBy: muted ? arrayRemove(me()) : arrayUnion(me()) }), "Réglage non enregistré.");
+        modal.querySelector('#toggle-pin').onclick = () => run(() => updateDoc(ref, { pinnedBy: pinned ? arrayRemove(mine) : arrayUnion(mine) }), "Réglage non enregistré.");
+        modal.querySelector('#toggle-mute').onclick = () => run(() => updateDoc(ref, { mutedBy: muted ? arrayRemove(mine) : arrayUnion(mine) }), "Réglage non enregistré.");
         modal.querySelector('#rename-btn')?.addEventListener('click', () => {
             const name = modal.querySelector('#rename-input').value.trim();
             if (!name || name === chat.name) return;
             run(async () => {
                 await updateDoc(ref, { name });
-                await sendToChat({ ...chat, name }, systemMessage(`${myName()} a renommé le groupe en « ${name} »`));
+                await sendToChat({ ...chat, name }, systemMessage(chat, `${myName()} a renommé le groupe en « ${name} »`));
             }, "Renommage impossible.");
         });
         modal.querySelector('#add-members')?.addEventListener('click', () => openAddMembers(chat, draw));
         modal.querySelectorAll('[data-admin]').forEach(b => {
             b.onclick = () => {
-                const uid = b.dataset.admin;
-                run(() => updateDoc(ref, { admins: admins.includes(uid) ? arrayRemove(uid) : arrayUnion(uid) }), "Changement impossible.");
+                const k = b.dataset.admin;
+                const next = admins.includes(k) ? admins.filter(a => a !== k) : [...admins, k];
+                const { admins: a, adminAccounts } = membershipFields(chat, keys, next);
+                run(() => updateDoc(ref, adminAccounts ? { admins: a, adminAccounts } : { admins: a }), "Changement impossible.");
             };
         });
         modal.querySelectorAll('[data-remove]').forEach(b => {
             b.onclick = async () => {
-                const uid = b.dataset.remove;
-                if (!await showConfirmationModal("Retirer du groupe", `Retirer ${nameOf(chat, uid)} du groupe ?`)) return;
+                const k = b.dataset.remove;
+                if (!await showConfirmationModal("Retirer du groupe", `Retirer ${nameOf(chat, k)} du groupe ?`)) return;
                 run(async () => {
-                    await sendToChat(chat, systemMessage(`${myName()} a retiré ${nameOf(chat, uid)}`));
-                    await updateDoc(ref, { participants: arrayRemove(uid), admins: arrayRemove(uid), [`unreadCounts.${uid}`]: deleteField() });
+                    await sendToChat(chat, systemMessage(chat, `${myName()} a retiré ${nameOf(chat, k)}`));
+                    await updateDoc(ref, {
+                        ...membershipFields(chat, keys.filter(x => x !== k), admins.filter(x => x !== k)),
+                        [`unreadCounts.${k}`]: deleteField(),
+                    });
                 }, "Impossible de retirer ce membre.");
             };
         });
         modal.querySelector('#leave-group')?.addEventListener('click', async () => {
             if (!await showConfirmationModal("Quitter le groupe", "Vous ne recevrez plus les messages de ce groupe.")) return;
             try {
-                await sendToChat(chat, systemMessage(`${myName()} a quitté le groupe`));
-                const rest = chat.participants.filter(uid => uid !== me());
-                const update = { participants: arrayRemove(me()), [`unreadCounts.${me()}`]: deleteField() };
+                await sendToChat(chat, systemMessage(chat, `${myName()} a quitté le groupe`));
+                const rest = keys.filter(k => k !== mine);
                 // Dernier admin qui part : le groupe garde un admin (le plus ancien membre restant)
-                update.admins = !admins.some(uid => uid !== me()) && rest.length ? [rest[0]] : arrayRemove(me());
-                await updateDoc(ref, update);
+                const nextAdmins = amAdmin && !admins.some(k => k !== mine) && rest.length ? [rest[0]] : admins.filter(k => k !== mine);
+                await updateDoc(ref, {
+                    ...membershipFields(chat, rest, nextAdmins),
+                    [`unreadCounts.${mine}`]: deleteField(),
+                    // Les règles vérifient que c'est bien un profil de ce compte qui s'en va
+                    ...(legacy ? {} : { leftBy: mine }),
+                });
                 modal.classList.add('hidden');
                 closeChat();
             } catch (error) { console.error(error); showToast("Impossible de quitter le groupe.", 'warning'); }
         });
         modal.querySelector('#hide-chat')?.addEventListener('click', async () => {
             try {
-                await updateDoc(ref, { hiddenFor: arrayUnion(me()) });
+                await updateDoc(ref, { hiddenFor: arrayUnion(mine) });
                 modal.classList.add('hidden');
                 closeChat();
             } catch (error) { console.error(error); showToast("Action impossible.", 'warning'); }
@@ -803,16 +871,16 @@ function openInfoModal(chatId) {
 async function openAddMembers(chat, back) {
     const modal = document.getElementById('chat-modal');
     state.redrawInfo = null;
-    const candidates = (await loadApprovedUsers()).filter(u => !chat.participants.includes(u.id)).sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '', 'fr'));
+    const keys = memberKeys(chat);
+    const candidates = (await loadPeople()).filter(p => !keys.includes(p.key));
     const selected = new Set();
     const goBack = () => { state.redrawInfo = back; back(); };
     modal.innerHTML = `
         <div class="modal-panel chat-modal-panel" role="dialog" aria-modal="true">
             <div class="modal-body">
                 <div class="chat-modal-head"><h3 class="modal-title">Ajouter au groupe</h3><button type="button" class="chat-icon-btn" id="add-back" aria-label="Retour">✕</button></div>
-                <div class="chat-people">${candidates.length ? candidates.map(u => `
-                    <button type="button" class="chat-person" data-uid="${escapeHTML(u.id)}">${avatarHTML(u.displayName, u.id)}<span>${escapeHTML(u.displayName || u.email)}</span><span class="chat-check" aria-hidden="true">✓</span></button>`).join('')
-                    : '<p class="chat-empty">Toute l\'équipe fait déjà partie du groupe.</p>'}</div>
+                ${candidates.length > 8 ? '<input id="add-search" class="input chat-people-search" type="search" placeholder="Rechercher un collègue…">' : ''}
+                <div class="chat-people" id="add-list"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" id="add-cancel">Annuler</button>
@@ -820,23 +888,33 @@ async function openAddMembers(chat, back) {
             </div>
         </div>`;
     const confirm = modal.querySelector('#add-confirm');
-    modal.querySelectorAll('[data-uid]').forEach(b => {
-        b.onclick = () => {
-            selected.has(b.dataset.uid) ? selected.delete(b.dataset.uid) : selected.add(b.dataset.uid);
-            b.classList.toggle('is-selected');
-            confirm.disabled = !selected.size;
-        };
-    });
+    const list = modal.querySelector('#add-list');
+    const draw = () => {
+        const term = (modal.querySelector('#add-search')?.value || '').trim().toLowerCase();
+        const shown = candidates.filter(p => matchesPerson(p, term));
+        list.innerHTML = !candidates.length ? '<p class="chat-empty">Toute l\'équipe fait déjà partie du groupe.</p>'
+            : shown.length ? shown.map(p => personHTML(p, selected.has(p.key))).join('') : '<p class="chat-empty">Personne trouvé.</p>';
+        list.querySelectorAll('[data-key]').forEach(b => {
+            b.onclick = () => {
+                selected.has(b.dataset.key) ? selected.delete(b.dataset.key) : selected.add(b.dataset.key);
+                b.classList.toggle('is-selected');
+                confirm.disabled = !selected.size;
+            };
+        });
+    };
+    modal.querySelector('#add-search')?.addEventListener('input', draw);
+    draw();
     modal.querySelector('#add-back').onclick = goBack;
     modal.querySelector('#add-cancel').onclick = goBack;
     confirm.onclick = async () => {
         confirm.disabled = true;
-        const added = candidates.filter(u => selected.has(u.id));
+        const added = candidates.filter(p => selected.has(p.key));
+        const members = [...keys, ...added.map(p => p.key)];
         try {
-            const update = { participants: arrayUnion(...added.map(u => u.id)) };
-            added.forEach(u => { update[`memberNames.${u.id}`] = u.displayName || u.email; });
+            const update = membershipFields(chat, members, chat.admins || []);
+            added.forEach(p => { update[`memberNames.${p.key}`] = p.name; });
             await updateDoc(doc(db, "chats", chat.id), update);
-            await sendToChat({ ...chat, participants: [...chat.participants, ...added.map(u => u.id)] }, systemMessage(`${myName()} a ajouté ${added.map(u => u.displayName || u.email).join(', ')}`));
+            await sendToChat({ ...chat, members }, systemMessage(chat, `${myName()} a ajouté ${added.map(p => p.name).join(', ')}`));
         } catch (error) { console.error(error); showToast("Ajout impossible.", 'warning'); }
         goBack();
     };

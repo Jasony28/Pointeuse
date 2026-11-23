@@ -1,5 +1,13 @@
 export const updatesLog = [
     {
+        version: 'v2.4.1',
+        date: '23 novembre 2026',
+        changes: [
+            "**Messagerie par profil** : chaque profil peut écrire à n'importe quel autre profil, y compris à un autre profil du même compte. Un message envoyé à Thomas n'apparaît plus chez Julie, même s'ils partagent le compte, et chaque profil a ses propres non-lus, épingles et sourdines.",
+            "Les anciennes discussions restent lisibles ; elles sont encore partagées par tous les profils du compte.",
+        ]
+    },
+    {
         version: 'v2.4.0',
         date: '22 novembre 2026',
         changes: [
