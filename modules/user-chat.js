@@ -607,8 +607,26 @@ async function submitMessage() {
     } catch (error) {
         console.error("Erreur envoi:", error);
         input.value = text; autoGrow(input);
-        showToast("Message non envoyé. Vérifiez la connexion et réessayez.", 'warning');
+        showSendError(chat, error);
     }
+}
+
+/** Message refusé : dit pourquoi (discussion bloquée, accès refusé, connexion) au lieu d'un message général */
+async function showSendError(chat, error) {
+    if (error?.code !== 'permission-denied') {
+        showToast(`Message non envoyé (${error?.code || 'erreur inconnue'}). Vérifiez la connexion et réessayez.`, 'warning');
+        return;
+    }
+    try {
+        const fresh = (await getDoc(doc(db, "chats", chat.id))).data() || {};
+        if ((fresh.blockedBy || []).length) {
+            showToast("Message refusé : cette discussion est bloquée.", 'warning');
+            const local = state.chats.find(c => c.id === chat.id);
+            if (local) { local.blockedBy = fresh.blockedBy; if (state.activeId === chat.id) renderHeader(local); }
+            return;
+        }
+    } catch (e) { console.warn(e); }
+    showToast("Message refusé par le serveur (permission-denied) : les règles Firestore publiées n'autorisent pas cet envoi.", 'warning');
 }
 
 /** Auteur d'un message : le compte (vérifié par les règles) et le profil qui écrit */
