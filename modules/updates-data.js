@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v2.5.0',
+        date: '24 novembre 2026',
+        changes: [
+            "**Messagerie : bloquer quelqu'un** : dans les infos d'une discussion (ou depuis la liste des membres d'un groupe), touchez « Bloquer ». La discussion privée est fermée dans les deux sens et ses messages dans les groupes sont masqués pour vous. Le blocage est propre à chaque profil. « Débloquer » rétablit tout.",
+        ]
+    },
+    {
         version: 'v2.4.1',
         date: '23 novembre 2026',
         changes: [

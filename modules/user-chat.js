@@ -1,11 +1,13 @@
 // Messagerie : conversations à deux et groupes, réponses, réactions, messages modifiables, « Vu », mentions @.
 // Chaque PROFIL est un membre (voir chat-keys.js) : deux profils d'un même compte peuvent s'écrire,
 // et un message envoyé à Thomas n'apparaît pas chez Julie, même s'ils partagent le compte.
+// Bloquer quelqu'un (par profil) : la discussion à deux est fermée dans les deux sens (règles Firestore : « blockedBy »)
+// et ses messages dans les groupes sont masqués (liste « chatBlocks.<mon profil> » de la fiche du compte).
 // Quota Firebase gratuit : seuls les 40 derniers messages sont écoutés en direct, les plus anciens à la demande.
 import { db, currentUser, showConfirmationModal, showInfoModal, showToast, getActiveProfileName } from '../app.js';
 import {
     collection, query, where, orderBy, onSnapshot, serverTimestamp, getDocs, doc, updateDoc, setDoc,
-    increment, arrayUnion, arrayRemove, limitToLast, endBefore, writeBatch, deleteField
+    increment, arrayUnion, arrayRemove, limitToLast, endBefore, writeBatch, deleteField, getDoc
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getUsers } from './data-service.js';
 import { escapeHTML } from './html-utils.js';
@@ -27,6 +29,7 @@ const state = {
     editing: null,
     search: '',
     people: [],           // tous les profils des comptes validés (annuaire)
+    blocked: new Set(),   // membres bloqués par le profil actif (clés de profil, ou uid pour une ancienne discussion)
     redrawInfo: null,     // fenêtre « Infos » ouverte, redessinée à chaque changement de la conversation
 };
 let conversationsListener = null;
@@ -63,6 +66,12 @@ const colorFor = (key) => AVATAR_COLORS[[...String(key || '')].reduce((s, c) => 
 const toDate = (ts) => ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
 const isGroup = (chat) => chat?.type === 'group';
 const activeChat = () => state.chats.find(c => c.id === state.activeId) || null;
+/** Discussion à deux fermée : l'un des deux a bloqué l'autre */
+const isBlockedChat = (chat) => !isGroup(chat) && (chat?.blockedBy || []).length > 0;
+const otherOf = (chat) => memberKeys(chat).find(k => k !== meIn(chat));
+/** Profil qui a écrit un message (anciens messages : retrouvé par le compte et le nom du profil) */
+const personKeyOf = (m) => m.senderKey || (m.senderProfile ? profileKey(m.senderId, m.senderProfile) : m.senderId);
+const isBlockedSender = (m) => state.blocked.has(personKeyOf(m)) || state.blocked.has(m.senderId);
 const preview = (text, max = 80) => { const t = String(text || '').replace(/\s+/g, ' ').trim(); return t.length > max ? `${t.slice(0, max)}…` : t; };
 
 /** Nom d'un membre (clé de profil, ou uid pour une ancienne discussion) */
@@ -164,12 +173,15 @@ export async function render(params = {}) {
                         </button>
                     </div>
                 </form>
+                <div id="chat-blocked" class="chat-blocked hidden"></div>
             </section>
         </div>
         <div id="chat-modal" class="modal hidden"></div>
     `;
     state.people = []; // annuaire relu à chaque ouverture (nouveaux profils)
     loadPeople().then(() => { renderConversations(); if (activeChat()) renderHeader(activeChat()); }).catch(console.error);
+    state.blocked = new Set();
+    loadBlocked();
     setupEventListeners();
     loadConversations();
     // Ouverte depuis une notification : directement sur la discussion
@@ -242,9 +254,11 @@ function renderConversations() {
         const unread = chat.unreadCounts?.[mine] || 0;
         const muted = (chat.mutedBy || []).includes(mine);
         const pinned = (chat.pinnedBy || []).includes(mine);
+        const blocked = isBlockedChat(chat);
         const title = chatTitle(chat);
         const lastSender = chat.lastSenderKey || chat.lastSenderId;
-        const sender = lastSender && chat.lastMessage
+        const hiddenLast = isGroup(chat) && !!lastSender && (state.blocked.has(lastSender) || state.blocked.has(chat.lastSenderId));
+        const sender = lastSender && chat.lastMessage && !hiddenLast
             ? (lastSender === mine ? 'Vous : ' : isGroup(chat) ? `${preview((chat.lastSenderName || nameOf(chat, lastSender)).split(' ')[0], 20)} : ` : '')
             : '';
         return `
@@ -256,7 +270,8 @@ function renderConversations() {
                         <span class="chat-conv-time">${timeLabel(toDate(chat.lastMessageTime))}</span>
                     </span>
                     <span class="chat-conv-bottom">
-                        <span class="chat-conv-last">${escapeHTML(sender + preview(chat.lastMessage || (isGroup(chat) ? `${memberKeys(chat).length} membres` : 'Nouvelle discussion')))}</span>
+                        <span class="chat-conv-last">${escapeHTML(sender + preview(hiddenLast ? 'Message masqué' : (chat.lastMessage || (isGroup(chat) ? `${memberKeys(chat).length} membres` : 'Nouvelle discussion'))))}</span>
+                        ${blocked ? '<span class="chat-flag" title="Bloquée">🚫</span>' : ''}
                         ${pinned ? '<span class="chat-flag" title="Épinglée">📌</span>' : ''}
                         ${muted ? '<span class="chat-flag" title="Sourdine">🔕</span>' : ''}
                         ${unread ? `<span class="chat-badge${muted ? ' is-muted' : ''}">${unread > 99 ? '99+' : unread}</span>` : ''}
@@ -305,7 +320,7 @@ function closeChat() {
     state.activeId = null;
     tellActiveChat(null);
     document.getElementById('chat-shell')?.classList.remove('has-active');
-    ['chat-header', 'messages-area', 'message-form'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+    ['chat-header', 'messages-area', 'message-form', 'chat-blocked'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
     document.getElementById('no-chat-selected')?.classList.remove('hidden');
     renderConversations();
 }
@@ -339,6 +354,25 @@ function renderHeader(chat) {
     header.querySelector('#back-to-list').onclick = closeChat;
     header.querySelector('#chat-info-btn').onclick = () => openInfoModal(chat.id);
     header.querySelector('#chat-settings-btn').onclick = () => openInfoModal(chat.id);
+    renderBlockedBar(chat);
+}
+
+/** Discussion bloquée : plus de zone de saisie, un bandeau à la place (avec « Débloquer » pour celui qui a bloqué) */
+function renderBlockedBar(chat) {
+    const form = document.getElementById('message-form');
+    const bar = document.getElementById('chat-blocked');
+    if (!form || !bar) return;
+    const blocked = isBlockedChat(chat);
+    form.classList.toggle('hidden', blocked);
+    bar.classList.toggle('hidden', !blocked);
+    if (!blocked) { bar.innerHTML = ''; return; }
+    clearComposerContext();
+    const other = otherOf(chat);
+    const mine = (chat.blockedBy || []).includes(meIn(chat));
+    bar.innerHTML = mine
+        ? `<span>🚫 Vous avez bloqué ${escapeHTML(nameOf(chat, other))}. Vous ne recevez plus ses messages.</span><button type="button" class="btn btn-secondary" id="unblock-btn">Débloquer</button>`
+        : '<span>🚫 Vous ne pouvez plus envoyer de messages dans cette discussion.</span>';
+    bar.querySelector('#unblock-btn')?.addEventListener('click', () => toggleBlock(other, nameOf(chat, other), false));
 }
 
 function renderMessages(fromSnapshot) {
@@ -360,6 +394,10 @@ function renderMessages(fromSnapshot) {
         if (day !== prevDay) { html += `<div class="chat-day"><span>${escapeHTML(dayLabel(date))}</span></div>`; prevDay = day; prev = null; }
         if (m.type === 'system') { html += `<div class="chat-system">${escapeHTML(m.text)}</div>`; prev = null; continue; }
         const mine = isMine(m, chat);
+        if (!mine && isGroup(chat) && isBlockedSender(m)) {
+            html += `<div class="chat-row"><div class="chat-bubble-wrap"><div class="chat-bubble is-deleted">Message masqué : vous avez bloqué ${escapeHTML(m.senderProfile || nameOf(chat, senderKeyOf(m)))}</div></div></div>`;
+            prev = null; continue;
+        }
         const grouped = prev && senderKeyOf(prev) === senderKeyOf(m) && (prev.senderProfile || '') === (m.senderProfile || '') && date - (toDate(prev.createdAt) || date) < 5 * 60000;
         html += messageHTML(m, chat, mine, grouped, date, m === lastMine);
         prev = m;
@@ -543,7 +581,7 @@ async function submitMessage() {
     const input = document.getElementById('message-input');
     const text = input.value.trim().slice(0, MAX_LENGTH);
     const chat = activeChat();
-    if (!text || !chat) return;
+    if (!text || !chat || isBlockedChat(chat)) return;
     document.getElementById('mention-list').classList.add('hidden');
 
     if (state.editing) {
@@ -617,7 +655,7 @@ function personHTML(p, selected = false) {
     return `
         <button type="button" class="chat-person${selected ? ' is-selected' : ''}" data-key="${escapeHTML(p.key)}">
             ${avatarHTML(p.name, p.key)}
-            <span class="chat-person-name">${escapeHTML(p.name)}${account}</span>
+            <span class="chat-person-name">${escapeHTML(p.name)}${state.blocked.has(p.key) ? ' <span class="chat-blocked-tag">bloqué</span>' : ''}${account}</span>
             <span class="chat-check" aria-hidden="true">✓</span>
         </button>`;
 }
@@ -763,6 +801,7 @@ function openInfoModal(chatId) {
         const amAdmin = group && admins.includes(mine);
         const muted = (chat.mutedBy || []).includes(mine);
         const pinned = (chat.pinnedBy || []).includes(mine);
+        const other = group ? null : otherOf(chat);
         const keys = memberKeys(chat);
         const members = [...keys].sort((a, b) => Number(admins.includes(b)) - Number(admins.includes(a)) || nameOf(chat, a).localeCompare(nameOf(chat, b), 'fr'));
         modal.innerHTML = `
@@ -783,6 +822,7 @@ function openInfoModal(chatId) {
                     <div class="chat-toggles">
                         <button type="button" id="toggle-pin">${pinned ? '📌 Désépingler' : '📌 Épingler en haut'}</button>
                         <button type="button" id="toggle-mute">${muted ? '🔔 Réactiver les alertes' : '🔕 Mettre en sourdine'}</button>
+                        ${other ? `<button type="button" id="toggle-block" class="is-wide${state.blocked.has(other) ? '' : ' is-danger'}">${state.blocked.has(other) ? `✅ Débloquer ${escapeHTML(nameOf(chat, other))}` : `🚫 Bloquer ${escapeHTML(nameOf(chat, other))}`}</button>` : ''}
                     </div>
                     ${group ? `
                         <div class="chat-section-title"><span>Membres</span>${amAdmin && !legacy ? '<button type="button" id="add-members">+ Ajouter</button>' : ''}</div>
@@ -791,6 +831,7 @@ function openInfoModal(chatId) {
                                 ${avatarHTML(nameOf(chat, k), k, false, 'is-sm')}
                                 <span>${escapeHTML(nameOf(chat, k))}${k === mine ? ' (vous)' : ''}</span>
                                 ${admins.includes(k) ? '<em>admin</em>' : ''}
+                                ${k !== mine ? `<button type="button" class="chat-member-act${state.blocked.has(k) ? '' : ' is-danger'}" data-block="${escapeHTML(k)}">${state.blocked.has(k) ? 'Débloquer' : 'Bloquer'}</button>` : ''}
                                 ${amAdmin && k !== mine ? `
                                     <button type="button" class="chat-member-act" data-admin="${escapeHTML(k)}">${admins.includes(k) ? 'Retirer admin' : 'Nommer admin'}</button>
                                     <button type="button" class="chat-member-act is-danger" data-remove="${escapeHTML(k)}">Retirer</button>` : ''}
@@ -816,6 +857,10 @@ function openInfoModal(chatId) {
             }, "Renommage impossible.");
         });
         modal.querySelector('#add-members')?.addEventListener('click', () => openAddMembers(chat, draw));
+        modal.querySelector('#toggle-block')?.addEventListener('click', () => toggleBlock(other, nameOf(chat, other)).then(draw));
+        modal.querySelectorAll('[data-block]').forEach(b => {
+            b.onclick = () => toggleBlock(b.dataset.block, nameOf(chat, b.dataset.block)).then(draw);
+        });
         modal.querySelectorAll('[data-admin]').forEach(b => {
             b.onclick = () => {
                 const k = b.dataset.admin;
@@ -918,4 +963,54 @@ async function openAddMembers(chat, back) {
         } catch (error) { console.error(error); showToast("Ajout impossible.", 'warning'); }
         goBack();
     };
+}
+
+/* ------------------------------------------------------------------ Blocage (par profil) */
+
+async function loadBlocked() {
+    const profile = myProfileKey();
+    try {
+        const snap = await getDoc(doc(db, "users", me()));
+        if (profile !== myProfileKey()) return; // profil changé entre-temps
+        state.blocked = new Set(snap.data()?.chatBlocks?.[profile] || []);
+        renderConversations();
+        if (activeChat()) { renderHeader(activeChat()); renderMessages(false); }
+    } catch (error) { console.warn(error); }
+}
+
+/**
+ * Bloquer / débloquer un membre (clé de profil, ou uid dans une ancienne discussion) pour le profil actif :
+ * ma liste « chatBlocks » + la discussion à deux, créée si besoin et cachée des deux côtés.
+ */
+async function toggleBlock(key, name, block = !state.blocked.has(key)) {
+    const profile = myProfileKey();
+    if (!key || key === profile || key === me()) return;
+    if (block && !await showConfirmationModal(`Bloquer ${name}`,
+        `${name} ne pourra plus vous écrire en privé, et vous non plus tant que vous ne l'aurez pas débloqué. Ses messages dans les groupes seront masqués pour vous.`)) return;
+    const legacy = !key.includes('__'); // ancienne discussion : le membre est un compte
+    const mine = legacy ? me() : profile;
+    const members = [mine, key].sort();
+    const chatId = legacy ? members.join('_') : `p_${members.join('--')}`;
+    const existing = state.chats.find(c => c.id === chatId);
+    try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, "users", me()), { [`chatBlocks.${profile}`]: block ? arrayUnion(key) : arrayRemove(key) });
+        if (existing) {
+            batch.update(doc(db, "chats", chatId), { blockedBy: block ? arrayUnion(mine) : arrayRemove(mine), blockChangeBy: mine });
+        } else if (block && !legacy) {
+            batch.set(doc(db, "chats", chatId), {
+                type: 'direct', members, participants: uniq(members.map(uidOfKey)),
+                memberNames: { [mine]: myName(), [key]: name },
+                lastMessageTime: serverTimestamp(), hiddenFor: members, blockedBy: [mine], blockChangeBy: mine,
+            }, { merge: true });
+        }
+        await batch.commit();
+        block ? state.blocked.add(key) : state.blocked.delete(key);
+        showToast(block ? `${name} est bloqué.` : `${name} est débloqué.`);
+        renderConversations();
+        if (activeChat()) { renderHeader(activeChat()); renderMessages(false); }
+    } catch (error) {
+        console.error(error);
+        showToast(block ? "Blocage impossible." : "Déblocage impossible.", 'warning');
+    }
 }
