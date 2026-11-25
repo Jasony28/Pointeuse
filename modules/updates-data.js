@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v2.5.3',
+        date: '25 novembre 2026',
+        changes: [
+            "**Messagerie** : le message est envoyé en premier, puis l'aperçu de la discussion est mis à jour à part, pour qu'un refus sur l'aperçu n'empêche plus l'envoi.",
+        ]
+    },
+    {
         version: 'v2.5.2',
         date: '25 novembre 2026',
         changes: [

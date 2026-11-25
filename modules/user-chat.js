@@ -620,12 +620,10 @@ function author(chat) {
         : { senderId: me(), senderProfile: myName() };
 }
 
-/** Message + mise à jour de la conversation (aperçu, non-lus des autres) en une seule écriture groupée */
+/** Message + mise à jour de la conversation (aperçu, non-lus des autres) */
 async function sendToChat(chat, message) {
-    const batch = writeBatch(db);
     const mine = meIn(chat);
     const system = message.type === 'system';
-    batch.set(doc(collection(db, `chats/${chat.id}/messages`)), message);
     const update = {
         lastMessage: system ? message.text : preview(message.text, 120),
         // pas de « Vous : » devant « X a ajouté Y »
@@ -637,8 +635,14 @@ async function sendToChat(chat, message) {
         [`readAt.${mine}`]: serverTimestamp(),
     };
     if (!system) for (const k of memberKeys(chat)) if (k !== mine) update[`unreadCounts.${k}`] = increment(1);
-    batch.update(doc(db, "chats", chat.id), update);
-    await batch.commit();
+    // Le message d'abord (indispensable), puis l'aperçu de la discussion : si les règles Firebase refusent
+    // seulement l'aperçu (règles anciennes), le message part quand même
+    await setDoc(doc(collection(db, `chats/${chat.id}/messages`)), message);
+    try {
+        await updateDoc(doc(db, "chats", chat.id), update);
+    } catch (error) {
+        console.error("Aperçu de la discussion non mis à jour:", error);
+    }
 }
 
 const systemMessage = (chat, text) => ({ type: 'system', text, ...author(chat), createdAt: serverTimestamp(), deleted: false });
