@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v2.5.2',
+        date: '25 novembre 2026',
+        changes: [
+            "**Chrono** : si l'arrêt n'a pas pu être enregistré (pas de réseau…), le chrono reste affiché pour réessayer, au lieu de disparaître en laissant le pointage « en cours ».",
+            "**Historique (admin)** : « Réattribuer » propose bien les profils des employés et crée le pointage au bon compte.",
+            "**Rapports admin** : les heures et coûts des comptes anciens sont de nouveau comptés.",
+            "**Sécurité** : les notes et noms saisis s'affichent comme du texte, sans pouvoir modifier la page.",
+        ]
+    },
+    {
         version: 'v2.5.1',
         date: '25 novembre 2026',
         changes: [

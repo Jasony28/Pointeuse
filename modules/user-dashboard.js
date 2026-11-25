@@ -319,7 +319,7 @@ function pausePointage() {
     
     localStorage.setItem(`activePointage_${activeProfileName}`, JSON.stringify(activePointage));
     const pointageRef = doc(db, "pointages", activePointage.docId);
-    updateDoc(pointageRef, { status: 'paused', pauses: activePointage.pauses });
+    updateDoc(pointageRef, { status: 'paused', pauses: activePointage.pauses }).catch(error => console.error("Erreur pause:", error));
     initLiveTracker();
 }
 
@@ -333,7 +333,7 @@ function resumePointage() {
     
     localStorage.setItem(`activePointage_${activeProfileName}`, JSON.stringify(activePointage));
     const pointageRef = doc(db, "pointages", activePointage.docId);
-    updateDoc(pointageRef, { status: 'running', pauses: activePointage.pauses });
+    updateDoc(pointageRef, { status: 'running', pauses: activePointage.pauses }).catch(error => console.error("Erreur reprise:", error));
     initLiveTracker();
 }
 
@@ -358,6 +358,7 @@ async function startPointage(chantierId, chantierName) {
         localStorage.setItem(`activePointage_${activeProfileName}`, JSON.stringify({ docId: newPointageRef.id, ...newPointageData }));
         initLiveTracker();
     } catch (error) {
+        console.error("Erreur démarrage du chrono:", error);
         showInfoModal("Erreur", "Le démarrage du pointage a échoué.");
     }
 }
@@ -376,14 +377,17 @@ async function stopPointage(notes = "") {
     const pointageRef = doc(db, "pointages", activePointage.docId);
     
     try {
-        await updateDoc(pointageRef, { endTime: new Date().toISOString(), notes, pauseDurationMs: totalPauseMs, status: 'completed' });
+        await updateDoc(pointageRef, { endTime: new Date().toISOString(), notes, pauseDurationMs: totalPauseMs, pauses: activePointage.pauses || [], status: 'completed' });
+        // Le chrono n'est oublié sur le téléphone qu'une fois l'arrêt bien enregistré
+        clearInterval(timerInterval);
+        localStorage.removeItem(`activePointage_${activeProfileName}`);
         showInfoModal("Succès", "Chrono arrêté et enregistré avec succès !");
-    } catch (error) { 
-        showInfoModal("Erreur", "Une erreur est survenue lors de l'enregistrement."); 
-    } finally { 
-        clearInterval(timerInterval); 
-        localStorage.removeItem(`activePointage_${activeProfileName}`); 
-        initLiveTracker(); 
+    } catch (error) {
+        console.error("Erreur arrêt du chrono:", error);
+        // Sinon le pointage resterait « en cours » dans Firebase sans pouvoir être arrêté : on garde le chrono pour réessayer
+        showInfoModal("Erreur", "L'arrêt n'a pas pu être enregistré. Le chrono continue : vérifiez la connexion et touchez à nouveau « Arrêter ».");
+    } finally {
+        initLiveTracker();
     }
 }
 
@@ -707,7 +711,7 @@ function renderSuggestions(suggestions) {
         card.style.borderBottomColor = 'var(--color-border)';
         card.style.backgroundColor = 'var(--color-surface)';
         card.innerHTML = `
-            <p class="font-semibold" style="color: var(--color-text-base);">${sugg.userName} a pointé sur <strong style="color: var(--color-primary);">${sugg.chantier}</strong>.</p>
+            <p class="font-semibold" style="color: var(--color-text-base);">${escapeHTML(sugg.userName)} a pointé sur <strong style="color: var(--color-primary);">${escapeHTML(sugg.chantier)}</strong>.</p>
             <p class="text-sm" style="color: var(--color-text-muted);">Le ${start.toLocaleDateString('fr-FR')} de ${start.toLocaleTimeString('fr-FR', timeFormat)} à ${end.toLocaleTimeString('fr-FR', timeFormat)}.</p>
             <p class="mt-2 font-medium" style="color: var(--color-text-base);">Étiez-vous avec cette personne ?</p>
             <div class="flex gap-4 mt-3">

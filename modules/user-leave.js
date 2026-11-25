@@ -1,5 +1,6 @@
 import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, doc, deleteDoc, updateDoc, writeBatch, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal, showConfirmationModal, getActiveProfileName, isActiveProfile } from "../app.js";
+import { escapeHTML } from "./html-utils.js";
 
 // Demande de congé du profil actif (même compte ET même profil : un compte peut être partagé)
 const isMine = (entry) => entry.userId === currentUser.uid && isActiveProfile(entry.userName);
@@ -395,8 +396,8 @@ function displayLeaveList() {
             card.style.cssText = statusStyle;
             card.innerHTML = `
                 <div>
-                    <p class="font-bold" style="color: var(--color-text-base);">${entry.userName}</p>
-                    <p class="text-sm" style="color: var(--color-text-muted);">${reasonText}</p>
+                    <p class="font-bold" style="color: var(--color-text-base);">${escapeHTML(entry.userName)}</p>
+                    <p class="text-sm" style="color: var(--color-text-muted);">${escapeHTML(reasonText)}</p>
                 </div>
                 <div class="text-right">
                     <span class="font-bold text-sm">${statusText}</span>

@@ -1,6 +1,7 @@
 import { collection, query, orderBy, getDocs, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent } from "../app.js";
 import { formatMilliseconds } from "./utils.js";
+import { escapeHTML } from "./html-utils.js";
 
 export async function render() {
     pageContent.innerHTML = `
@@ -59,7 +60,7 @@ function createPointageElement(id, data) {
     el.innerHTML = `
         <div class="flex flex-wrap justify-between items-center pointer-events-none">
             <div>
-                <p class="font-bold">${data.userName} sur "${data.chantier}"</p>
+                <p class="font-bold">${escapeHTML(data.userName)} sur "${escapeHTML(data.chantier)}"</p>
                 <p class="text-sm text-gray-600">${dateDisplay}</p>
             </div>
             <div class="text-right">

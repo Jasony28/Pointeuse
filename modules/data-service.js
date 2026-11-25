@@ -52,7 +52,8 @@ export async function getTeamMembers(forceRefresh = false) {
 export async function getAllUsers(forceRefresh = false) {
     if (fresh(usersCache) && !forceRefresh) return usersCache.list;
     const snapshot = await getDocs(query(collection(db, "users"), orderBy("displayName")));
-    usersCache = { at: Date.now(), list: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+    // « uid » = identifiant du document (les comptes anciens n'ont pas toujours le champ uid)
+    usersCache = { at: Date.now(), list: snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, uid: doc.id })) };
     return usersCache.list;
 }
 

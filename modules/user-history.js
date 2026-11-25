@@ -3,6 +3,8 @@ import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, nav
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers } from "./data-service.js";
 import { loadPdf } from "./libs.js";
+import { escapeHTML } from "./html-utils.js";
+import { profileDirectory } from "./chat-keys.js";
 import { openRetourModal, getRetoursForUser, levelPill } from "./retours-clients.js";
 
 let currentWeekOffset = 0;
@@ -997,7 +999,7 @@ function createHistoryEntryElement(d, trajetData, retourData) {
     }
     const retourClient = retoursByPointage.get(d.id);
     const retourDisplay = retourClient ? `<button type="button" class="retour-link" data-retour="${retourClient.id}">${levelPill(retourClient.level)}<span>Retour client</span></button>` : '';
-    wrapper.innerHTML = `<div class="${currentUser.role === 'admin' && !localStealthMode ? 'pr-36' : 'pr-20'}"><div class="entry-profile">${d.userName || 'Inconnu'}</div><div class="font-bold">${d.chantier}</div>${retourDisplay}<div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}</div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
+    wrapper.innerHTML = `<div class="${currentUser.role === 'admin' && !localStealthMode ? 'pr-36' : 'pr-20'}"><div class="entry-profile">${escapeHTML(d.userName || 'Inconnu')}</div><div class="font-bold">${escapeHTML(d.chantier)}</div>${retourDisplay}<div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}</div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${escapeHTML(d.notes)}</div>` : ""}`;
 
     if (currentUser.role === 'admin' && !localStealthMode) {
         const controlsWrapper = document.createElement("div");
@@ -1047,14 +1049,16 @@ async function openReassignModal(pointageId) {
     reassignConfirmBtn.disabled = true;
 
     try {
-        const users = await getUsers(true);
-        const otherUsers = users.filter(user => user.uid !== pointageToReassign.uid);
+        // Les comptes ont leur identifiant dans « id » ; un pointage appartient à un profil (compte + nom)
+        const sameProfile = (p) => p.uid === pointageToReassign.uid
+            && p.name.trim().toLowerCase() === String(pointageToReassign.userName || '').trim().toLowerCase();
+        const others = profileDirectory(await getUsers(true)).filter(p => !sameProfile(p));
 
-        if (otherUsers.length === 0) {
-            userSelect.innerHTML = '<option>Aucun autre utilisateur trouvé.</option>';
+        if (others.length === 0) {
+            userSelect.innerHTML = '<option value="">Aucun autre employé trouvé.</option>';
         } else {
-            userSelect.innerHTML = otherUsers
-                .map(user => `<option value="${user.uid}" data-name="${user.displayName}">${user.displayName}</option>`)
+            userSelect.innerHTML = others
+                .map(p => `<option value="${escapeHTML(p.uid)}" data-name="${escapeHTML(p.name)}">${escapeHTML(p.name)}</option>`)
                 .join('');
             reassignConfirmBtn.disabled = false;
         }

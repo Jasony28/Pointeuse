@@ -1,5 +1,5 @@
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent, showInfoModal } from "../app.js";
+import { db, currentUser, pageContent, showInfoModal, getActiveProfileName } from "../app.js";
 
 let selectedColleagues = [];
 let allColleaguesCache = [];
@@ -64,7 +64,7 @@ export async function render() {
         
         const pointagesCollectionRef = collection(db, "pointages");
         const docData = {
-            uid: currentUser.uid, userEmail: currentUser.email, userName: currentUser.displayName,
+            uid: currentUser.uid, userEmail: currentUser.email, userName: getActiveProfileName() || currentUser.displayName,
             timestamp: startDateTime.toISOString(), endTime: endDateTime.toISOString(),
             chantier, notes: `(Saisie manuelle)${notes ? " " + notes : ""}`,
             colleagues: selectedColleagues.length ? selectedColleagues : ["Seul"],

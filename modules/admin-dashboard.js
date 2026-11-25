@@ -521,13 +521,13 @@ function createDetailedActivityElement(docId, d) {
         timeDisplay = `<div>Débuté à ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (en cours)</div>`;
     }
     wrapper.innerHTML = `
-        <div class="font-semibold" style="color: var(--color-primary);">${d.userName || 'Utilisateur inconnu'}</div>
-        <div class="font-bold text-lg">${d.chantier}</div>
+        <div class="font-semibold" style="color: var(--color-primary);">${escapeHTML(d.userName || 'Utilisateur inconnu')}</div>
+        <div class="font-bold text-lg">${escapeHTML(d.chantier)}</div>
         <div>${startDate.toLocaleDateString('fr-FR')}</div>
         ${timeDisplay}
         ${durationDisplay}
-        <div class="mt-2" style="color: var(--color-text-muted);"><strong>Collègues :</strong> ${(d.colleagues || []).join(", ") || 'Aucun'}</div>
-        ${d.notes ? `<div class="mt-1 pt-2 border-t text-sm" style="border-color: var(--color-border);"><strong>Notes :</strong> ${d.notes}</div>` : ""}
+        <div class="mt-2" style="color: var(--color-text-muted);"><strong>Collègues :</strong> ${escapeHTML((d.colleagues || []).join(", ")) || 'Aucun'}</div>
+        ${d.notes ? `<div class="mt-1 pt-2 border-t text-sm" style="border-color: var(--color-border);"><strong>Notes :</strong> ${escapeHTML(d.notes)}</div>` : ""}
     `;
     const deleteBtn = document.createElement("button");
     deleteBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="pointer-events: none;"><path d="M18 6 6 18M6 6l12 12"/></svg>';
