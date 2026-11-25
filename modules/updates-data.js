@@ -1,5 +1,13 @@
 export const updatesLog = [
     {
+        version: 'v2.5.5',
+        date: '25 novembre 2026',
+        changes: [
+            "**Suggestions « Étiez-vous avec cette personne ? »** : un double appui n'ajoute plus deux pointages, et la suggestion reste affichée si l'ajout échoue.",
+            "**Saisie manuelle (admin)** : l'heure de fin doit être après le début, et la pause plus courte que le pointage.",
+        ]
+    },
+    {
         version: 'v2.5.4',
         date: '25 novembre 2026',
         changes: [
