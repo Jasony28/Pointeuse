@@ -1246,6 +1246,16 @@ async function saveEntry(e) {
         };
     }
 
+    // Fin avant le début : la durée serait négative et fausserait les totaux
+    if (new Date(dataToSave.endTime) <= new Date(dataToSave.timestamp)) {
+        showInfoModal("Attention", "L'heure de fin doit être après l'heure de début.");
+        return;
+    }
+    if ((dataToSave.pauseDurationMs || 0) >= new Date(dataToSave.endTime) - new Date(dataToSave.timestamp)) {
+        showInfoModal("Attention", "La pause est plus longue que le pointage.");
+        return;
+    }
+
     try {
         if (isEditing) {
             const pointageRef = doc(db, "pointages", entryId);

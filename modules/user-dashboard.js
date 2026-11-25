@@ -721,19 +721,24 @@ function renderSuggestions(suggestions) {
         `;
         container.appendChild(card);
     });
-    container.addEventListener('click', handleSuggestionClick);
+    container.onclick = handleSuggestionClick; // une seule fois, même si la liste est redessinée
 }
 
 async function handleSuggestionClick(e) {
-    const button = e.target;
-    const suggId = button.dataset.suggId;
-    if (!suggId) return;
+    const button = e.target.closest('[data-sugg-id]');
+    const suggId = button?.dataset.suggId;
+    if (!suggId || button.disabled) return;
+    const card = button.closest('div.border-l-4');
     
     const activeProfileName = getActiveProfileName();
     
     if (button.classList.contains('accept-suggestion-btn')) {
-        const suggDoc = await getDoc(doc(db, "pointages", suggId));
-        if (!suggDoc.exists()) { showInfoModal("Erreur", "Pointage non trouvé."); return; }
+        // Un seul ajout, même en touchant plusieurs fois
+        card?.querySelectorAll('button').forEach(b => { b.disabled = true; });
+        const enable = () => card?.querySelectorAll('button').forEach(b => { b.disabled = false; });
+        let suggDoc;
+        try { suggDoc = await getDoc(doc(db, "pointages", suggId)); } catch (error) { console.error(error); enable(); showInfoModal("Erreur", "Impossible d'ajouter."); return; }
+        if (!suggDoc.exists()) { showInfoModal("Erreur", "Pointage non trouvé."); card?.remove(); return; }
         const suggestion = suggDoc.data();
         const originalColleagues = suggestion.colleagues || [];
         const filteredColleagues = originalColleagues.filter(name => name !== activeProfileName);
@@ -745,7 +750,12 @@ async function handleSuggestionClick(e) {
         try {
             await addDoc(collection(db, "pointages"), newPointageData);
             showInfoModal("Succès", "Ajouté à votre historique.");
-        } catch (error) { showInfoModal("Erreur", "Impossible d'ajouter."); }
+        } catch (error) {
+            console.error("Erreur ajout suggestion:", error);
+            enable();
+            showInfoModal("Erreur", "Impossible d'ajouter.");
+            return; // la suggestion reste affichée pour réessayer
+        }
     } else if (button.classList.contains('refuse-suggestion-btn')) {
         const refusedKey = `refusedPointages_${activeProfileName}`;
         const refusedPointages = JSON.parse(localStorage.getItem(refusedKey) || '[]');
@@ -754,7 +764,7 @@ async function handleSuggestionClick(e) {
             localStorage.setItem(refusedKey, JSON.stringify(refusedPointages));
         }
     }
-    button.closest('div.border-l-4').remove();
+    card?.remove();
 }
 
 const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
