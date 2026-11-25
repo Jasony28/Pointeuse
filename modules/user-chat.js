@@ -607,7 +607,9 @@ async function submitMessage() {
     } catch (error) {
         console.error("Erreur envoi:", error);
         input.value = text; autoGrow(input);
-        showToast("Message non envoyé. Vérifiez la connexion et réessayez.", 'warning');
+        showToast(error?.code === 'permission-denied'
+            ? "Message refusé par Firebase : les règles Firestore publiées ne sont pas à jour (voir docs/DEPLOIEMENT-FIREBASE.md)."
+            : "Message non envoyé. Vérifiez la connexion et réessayez.", 'warning');
     }
 }
 

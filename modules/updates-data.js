@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v2.5.1',
+        date: '25 novembre 2026',
+        changes: [
+            "**Messagerie** : quand un message est refusé par Firebase (règles pas à jour), l'appli le dit au lieu de parler de connexion.",
+        ]
+    },
+    {
         version: 'v2.5.0',
         date: '24 novembre 2026',
         changes: [
