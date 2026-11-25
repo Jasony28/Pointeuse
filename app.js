@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v2.5.3';
+const APP_VERSION = 'v2.5.4';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -501,6 +501,7 @@ const userTabs = [
     { id: 'user-retours', name: 'Retours clients', icon: 'feedback' },
     { id: 'user-fuel', name: 'Carburant', icon: 'fuel' },
     { id: 'settings', name: 'Paramètres', icon: 'settings' },
+    { id: 'diagnostic', name: 'Diagnostic', icon: 'bug' },
 ];
 
 const adminTabs = [
@@ -517,6 +518,7 @@ const adminTabs = [
     { id: 'admin-hours-report', name: 'Rapport heures', icon: 'clock' },
     { id: 'admin-team', name: 'Équipe', short: 'Équipe', icon: 'users' },
     { id: 'admin-errors', name: 'Erreurs', icon: 'bug' },
+    { id: 'diagnostic', name: 'Diagnostic', icon: 'bug' },
 ];
 
 // Libellés de fil d'Ariane pour les pages hors menu

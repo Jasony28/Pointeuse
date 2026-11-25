@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v2.5.4',
+        date: '25 novembre 2026',
+        changes: [
+            "**Diagnostic** (menu Plus) : vérifie ce que Firebase accepte pour votre compte (fiche, droits, messagerie) et donne un rapport à copier.",
+        ]
+    },
+    {
         version: 'v2.5.3',
         date: '25 novembre 2026',
         changes: [
