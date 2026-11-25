@@ -1,4 +1,5 @@
 rules_version = '2';
+// VERSION DES RÈGLES : 2026-11-25 (v2.5.3) — cette ligne doit apparaître dans la console après « Publier ».
 // Règles Firestore COMPLÈTES de la Pointeuse (projet pointeuse-ldpr), sur le modèle de la Pointeuse LPF,
 // adaptées aux comptes partagés par plusieurs profils.
 // À coller dans la console Firebase → Firestore Database → Règles (remplace tout), puis « Publier ».
