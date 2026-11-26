@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v2.5.4'; // <--- À changer à chaque nouvelle version (avec app.js)
+const APP_VERSION = 'v2.6.0'; // <--- À changer à chaque nouvelle version (avec app.js)
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -70,6 +70,9 @@ precaching.precacheAndRoute([
     { url: 'modules/user-fuel.js', revision: APP_VERSION },
     { url: 'modules/pleins.js', revision: APP_VERSION },
     { url: 'modules/fuel-cost.js', revision: APP_VERSION },
+    { url: 'modules/fiches-controle.js', revision: APP_VERSION },
+    { url: 'modules/fiches-store.js', revision: APP_VERSION },
+    { url: 'modules/user-fiche.js', revision: APP_VERSION },
 
     // Modules Admin
     { url: 'modules/admin-chantiers.js', revision: APP_VERSION },
@@ -86,6 +89,7 @@ precaching.precacheAndRoute([
     { url: 'modules/admin-site-requests.js', revision: APP_VERSION },
     { url: 'modules/admin-errors.js', revision: APP_VERSION },
     { url: 'modules/admin-retours.js', revision: APP_VERSION },
+    { url: 'modules/admin-fiches.js', revision: APP_VERSION },
 
     // Ressources statiques
     { url: 'icons/pointeuse-192.png', revision: APP_VERSION },

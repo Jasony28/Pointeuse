@@ -3,6 +3,7 @@ import { db, pageContent, showInfoModal, showConfirmationModal, showToast } from
 import { getGoogleMapsUrl } from "./utils.js";
 import { getActiveChantiers } from "./data-service.js";
 import { exportChantiersPdf } from "./chantiers-pdf.js";
+import { MODELES, ficheConfig } from "./fiches-controle.js";
 
 // Token Mapbox
 const MAPBOX_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
@@ -33,6 +34,7 @@ const icon = {
     restore: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
     pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
     clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    fiche: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 3v2h6V3M8.5 12l2 2 4.5-4.5M8 18h8"/></svg>',
     x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
 };
 
@@ -149,6 +151,27 @@ export async function render() {
                     </div>
 
                     <div class="form-section">
+                        <div>
+                            <h4 class="form-section-title">${icon.fiche} Fiche de contrôle <span>(remplie à chaque passage)</span></h4>
+                            <p class="field-hint">Un employé de l'équipe la remplit à tour de rôle. Sa sortie attend la fiche ; vous la retrouvez dans « Fiches de contrôle », avec le PDF.</p>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Modèle</span>
+                            <div class="wp-chips" id="formFicheModeles">${Object.values(MODELES).map(m => `<button type="button" class="wp-chip" data-fiche-modele="${m.code}" aria-pressed="false">${m.code} · ${m.court}</button>`).join('')}<button type="button" class="wp-chip" data-fiche-modele="" aria-pressed="true">Pas de fiche</button></div>
+                        </div>
+                        <div id="formFicheDetails" hidden>
+                            <div class="field">
+                                <label for="formFicheZone" class="field-label">Local / zone <span class="field-optional">(écrit sur la fiche)</span></label>
+                                <input id="formFicheZone" type="text" class="input" maxlength="80" placeholder="ex : Hall, couloirs et escaliers" autocomplete="off">
+                            </div>
+                            <div class="field">
+                                <span class="field-label">Hors prestation <span class="field-optional">(cochées S.O. d'office, l'employé n'y touche pas)</span></span>
+                                <div class="fc-so" id="formFicheHors"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
                         <div class="field">
                             <label class="field-label" for="formNewCode">Codes & accès</label>
                             <div class="flex items-center gap-2">
@@ -240,6 +263,8 @@ function chipsHTML(chantier) {
     else if (chantier.timeWindowStart) chips.push(`<span class="cchip is-window">Dès ${escapeHTML(chantier.timeWindowStart)}</span>`);
     else if (chantier.timeWindowEnd) chips.push(`<span class="cchip is-window">Fini avant ${escapeHTML(chantier.timeWindowEnd)}</span>`);
     if (chantier.isHideable) chips.push(`<span class="cchip is-hidden">Hors forfait</span>`);
+    const fiche = ficheConfig(chantier);
+    if (fiche) chips.push(`<span class="cchip is-window" title="Fiche de contrôle remplie à chaque passage">Fiche ${fiche.modele} · ${escapeHTML(MODELES[fiche.modele].court)}</span>`);
     if (chantier.address && !chantier.coordinates?.lat) chips.push(`<span class="cchip is-warning" title="L'adresse n'a pas été localisée : itinéraire et kilomètres impossibles">GPS manquant</span>`);
     if (!chantier.address) chips.push(`<span class="cchip is-warning">Sans adresse</span>`);
     return chips.join('');
@@ -346,7 +371,29 @@ function readFormValues() {
         isHideable: document.getElementById('formHideable').checked,
         keyboxCodes: Array.from(document.querySelectorAll('#formCodesList li span')).map(s => s.textContent),
         additionalInfo: document.getElementById('formInfo').value.trim(),
+        ficheControle: readFiche(),
     };
+}
+
+// --- Fiche de contrôle du chantier (modèle A1 / A2 / B1, zone, lignes hors prestation) ---
+let ficheModele = null;
+function readFiche() {
+    if (!ficheModele) return null;
+    return ficheConfig({ ficheControle: {
+        modele: ficheModele,
+        zone: document.getElementById('formFicheZone').value,
+        horsPrestation: [...document.querySelectorAll('#formFicheHors input:checked')].map(i => Number(i.value)),
+    } });
+}
+function renderFiche(cfg) {
+    ficheModele = cfg?.modele || null;
+    document.querySelectorAll('[data-fiche-modele]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.ficheModele || null) === ficheModele)));
+    document.getElementById('formFicheDetails').hidden = !ficheModele;
+    if (!ficheModele) return;
+    document.getElementById('formFicheZone').value = cfg.zone || '';
+    const hors = cfg.horsPrestation || [];
+    document.getElementById('formFicheHors').innerHTML = MODELES[ficheModele].points.map(([titre], i) =>
+        `<label><input type="checkbox" value="${i + 1}" ${hors.includes(i + 1) ? 'checked' : ''}><b>${i + 1}</b>${escapeHTML(titre)}</label>`).join('');
 }
 
 function addCodeToList(text) {
@@ -375,6 +422,7 @@ function openChantierForm(chantier = null) {
         document.getElementById('formInfo').value = chantier.additionalInfo || '';
         (chantier.keyboxCodes || []).forEach(addCodeToList);
     }
+    renderFiche(ficheConfig(chantier));
 
     updateGeoStatus();
     renderConstraintBox(document.getElementById('formTimeSummary'), readFormValues());
@@ -472,6 +520,12 @@ function setupEventListeners() {
     document.getElementById('exportChantiersPdfBtn').onclick = exportPdf;
     document.getElementById('chantierForm').onsubmit = saveChantier;
     document.getElementById('cancelChantierFormBtn').onclick = closeChantierForm;
+    document.querySelectorAll('[data-fiche-modele]').forEach(btn => btn.onclick = () => {
+        const code = btn.dataset.ficheModele || null;
+        if (code && code === ficheModele) return;
+        // Changer de modèle : les lignes ne sont plus les mêmes, la zone est gardée
+        renderFiche(code ? { modele: code, zone: document.getElementById('formFicheZone').value, horsPrestation: [] } : null);
+    });
     document.getElementById('closeDetailsBtn').onclick = () => document.getElementById('detailsModal').classList.add('hidden');
 
     document.getElementById('chantierSearchInput').addEventListener('input', displayChantiers);

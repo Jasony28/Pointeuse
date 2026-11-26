@@ -1,5 +1,5 @@
 rules_version = '2';
-// VERSION DES RÈGLES : 2026-11-25 (v2.5.3) — cette ligne doit apparaître dans la console après « Publier ».
+// VERSION DES RÈGLES : 2026-11-26 (v2.6.0) — cette ligne doit apparaître dans la console après « Publier ».
 // Règles Firestore COMPLÈTES de la Pointeuse (projet pointeuse-ldpr), sur le modèle de la Pointeuse LPF,
 // adaptées aux comptes partagés par plusieurs profils.
 // À coller dans la console Firebase → Firestore Database → Règles (remplace tout), puis « Publier ».
@@ -242,6 +242,34 @@ service cloud.firestore {
                     && request.resource.data.photo is string
                     && request.resource.data.photo.matches('^data:image/jpeg;base64,.*');
       allow delete: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
+    }
+
+    // 12. FICHES DE CONTRÔLE : une par chantier et par jour (id « chantierId_AAAA-MM-JJ »), lisible par les comptes
+    //     validés (règle 1). L'équipe sur place la crée et la complète ; seul le compte qui la valide peut la
+    //     passer en « validee » (à son nom), et une fiche validée ne change plus. L'admin peut tout corriger.
+    match /fichesControle/{ficheId} {
+      function ficheOk(d) {
+        return d.chantierId is string && d.date is string && d.date.size() == 10
+            && ficheId == d.chantierId + '_' + d.date
+            && d.modele in ['A1', 'A2', 'B1']
+            && d.get('statut', 'a_remplir') in ['a_remplir', 'en_cours', 'validee']
+            && d.get('observations', '') is string && d.get('observations', '').size() <= 600
+            && !('envoyeeLe' in d);
+      }
+      allow create: if isAdmin() || (isApproved() && ficheOk(request.resource.data)
+                    && request.resource.data.get('statut', 'a_remplir') != 'validee');
+      allow update: if isAdmin() || (isApproved()
+                    && resource.data.get('statut', '') != 'validee'
+                    && ficheOk(request.resource.data)
+                    && request.resource.data.chantierId == resource.data.chantierId
+                    && request.resource.data.date == resource.data.date
+                    && (request.resource.data.get('statut', '') != 'validee'
+                        || request.resource.data.responsableUid == request.auth.uid));
+      allow delete: if isAdmin();
+    }
+    // Rotation : dernière fiche remplie par chacun sur ce chantier (qui remplit la prochaine)
+    match /fichesRotation/{chantierId} {
+      allow write: if isApproved();
     }
   }
 }
